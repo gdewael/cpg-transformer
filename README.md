@@ -119,7 +119,7 @@ For the datasets used in our paper, we provide template preprocessing scripts in
 
 This repo contains implementations of CpG Transformer, DeepCpg and CaMelia, all using the same 
 
-```bash
+```
 python train_cpg_transformer.py -h
 usage: train_cpg_transformer.py [-h] [--segment_size int] [--fracs float [float ...]]
                                 [--mask_p float] [--mask_random_p float] [--resample_cells int]
