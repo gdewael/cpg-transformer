@@ -7,7 +7,7 @@ class CaMeliaModel():
                  eval_metric='AUC', device='GPU'):
         self.dropnans = dropnans
         self.model = CatBoostClassifier(learning_rate=learning_rate, max_depth=max_depth,
-                                        verbose=verbose, eval_metric=eval_metric
+                                        verbose=verbose, eval_metric=eval_metric,
                                         task_type=device, cat_features=['DNA'+str(i) for i in range(20)])
         
     def fit(self, X_train, y_train):    
@@ -30,5 +30,5 @@ class CaMeliaModel():
         with open(save_location, 'wb') as f:
             np.savez_compressed(f, outs, pos_test)
     
-    def save_model(self, save_location):
+    def save(self, save_location):
         self.model.save_model(save_location)

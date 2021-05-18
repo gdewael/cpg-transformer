@@ -1,7 +1,8 @@
 # CpG Transformer
 
-This repository contains code, pre-trained models and instructions on how to use CpG Transformer for imputation of single-cell methylomes.
-A stand-alone version of our novel 2D self-attention mechanism is available at ...
+This repository contains code, pre-trained models and instructions on how to use CpG Transformer TODO link
+for imputation of single-cell methylomes.
+A stand-alone version of our novel 2D self-attention mechanism is available at ... TODO link
 
 
 <details><summary>Table of contents</summary>
@@ -38,9 +39,9 @@ A stand-alone version of our novel 2D self-attention mechanism is available at .
 
 CpG Transformer is implemented in [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning).
 
-If you have GPU resources and CUDA properly set up, we recommend running CpG Transformer locally using a conda environment:
-Make sure to install the correct version of pytorch (using the cuda version that is installed on your system).
-The following shows the installation process with CUDA 10.1:
+If you have one or more GPUs on your machine, we recommend running CpG Transformer locally using a conda environment.
+Make sure to install the correct version of PyTorch (using the cuda version that is installed on your system).
+The following shows an example installation process for a system running CUDA 10.1:
 
 ```bash
 conda create --name cpgtransformer
@@ -49,14 +50,18 @@ conda install pip
 which pip
 pip install torch==1.8.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 pip install pytorch-lightning==1.3.0 biopython pandas numpy
+git clone https://github.com/gdewael/cpg-transformer.git
 ```
+
+In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested up to Python 3.9.4, PyTorch 1.8.1, PyTorch Lightning 1.3.0.
 
 For CaMelia training and imputation, additionally do:
 ```bash
 pip install catboost
 ```
 
-Alternatively, we provide Google Colab training scripts ...
+If your machine does not have a GPU, we provide Google Colab transfer learning and imputation notebooks that run on Google cloud resources. (see Quick start) TODO link.
+
 
 ## Usage
 
@@ -117,7 +122,9 @@ For the datasets used in our paper, we provide template preprocessing scripts in
 
 ### Training 
 
-This repo contains implementations of CpG Transformer, DeepCpg and CaMelia, all using the same 
+Separate training scripts are provided for training CpG Transformer models `train_cpg_transformer.py`, DeepCpG `train_deepcpg.py` and CaMelia `train_camelia.py`. In the following, only the arguments to CpG Transformer will be discussed. For all scripts, arguments and their explanations can be accessed with the `-h` help flag.
+
+Arguments to CpG Transformer are split into 4 groups: (1) `DataModule` arguments concern how the data will be preprocessed and loaded for the model to use, (2) `Model` arguments concern model architecture and training, (3) `Logging` arguments determine how the training process can be followed and where model weights will be saved and (4) `pl.Trainer` list all arguments to the PyTorch Lightning trainer object. Most of these arguments are not applicable to standard use of CpG Transformer but are kept in for full flexibility. For more information on arguments we refer to the [pl.Trainer documentation](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#).
 
 ```
 python train_cpg_transformer.py -h
@@ -180,7 +187,11 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+```
 
+
+<details><summary>DataModule arguments</summary>
+```
 DataModule:
   Data Module arguments
 
@@ -205,7 +216,11 @@ DataModule:
   --batch_size int      Batch size (default: 1)
   --n_workers int       Number of worker threads to use in data loading. Increase if you
                         experience a CPU bottleneck. (default: 4)
+```
+</details>
 
+<details><summary>Model arguments</summary>
+```
 Model:
   CpG Transformer Hyperparameters
 
@@ -235,7 +250,11 @@ Model:
                         0.9)
   --warmup_steps int    Number of steps over which the learning rate will linearly warm up.
                         (default: 1000)
+```
+</details>
 
+<details><summary>Logging arguments</summary>
+```
 Logging:
   Logging arguments
 
@@ -251,7 +270,11 @@ Logging:
                         decreased for `patience` epochs. (default: True)
   --patience int        Number of epochs to wait for a possible decrease in validation loss
                         before early stopping. (default: 10)
+```
+</details>
 
+<details><summary>PyTorch Lightning arguments</summary>
+```
 pl.Trainer:
   --logger [str_to_bool]
                         Logger (or iterable collection of loggers) for experiment tracking. A
@@ -433,10 +456,7 @@ pl.Trainer:
                         <https://pytorch.org/blog/pytorch-1.6-now-includes-stochastic-weight-
                         averaging/>_` (default: False)
 ```
-
-Extra elaboration on features such as tensorboard...
-
-
+</details>
 
 ### Imputation and denoising
 
@@ -447,7 +467,7 @@ Scrap previous paragraph want kga da int script steken ...
 
 ### Benchmarking
 
-Because CpG Transformer masks and randomizes multiple CpG sites per batch, training and validation performances reported during training are negatively biased. In practical use (imputation), this forms no problem, as no masking takes place at this point. For benchmarking however, CaMelia and DeepCpG may have an unfair advantage because they do not train using masking strategies. To perform a fair comparison, we use `benchmark.py`
+Because CpG Transformer masks and randomizes multiple CpG sites per batch, training and validation performances reported during training are negatively biased. In practical use (imputation), this forms no problem, as no masking takes place at this point. For benchmarking however, CaMelia and DeepCpG may have an unfair advantage because they do not train using masking strategies. To perform a fair comparison, DeepCpG and CaMelia can just use the `impute_genome.py` script and specify one or more test chromosomes. For CpG Transformer, we provide a separate `benchmark.py` script. It has to be noted that CpG Transformer was not designed to separately mask and predict sites like this. Consequently, the benchmark script may take a lot of time to run.
 
 
 
@@ -459,12 +479,6 @@ Because CpG Transformer masks and randomizes multiple CpG sites per batch, train
 ## Pre-trained Models
 
 Pre-trained models are available as PyTorch Lightning `LightningModule` checkpoints in `data/model_checkpoints`
-
-## Notes for developers
-
-CpG Transformer's python code is structured as follows: ...
-
-A stand-alone PyTorch implementation of the 2D self-attention can be found at.
 
 
 

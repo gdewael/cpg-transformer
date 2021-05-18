@@ -5,6 +5,7 @@ import random
 import pytorch_lightning as pl
 from torch.utils.data import WeightedRandomSampler
 import math
+import pandas as pd
 
 class CpGTransformerDataModule(pl.LightningDataModule):
     def __init__(self, X, y, pos, segment_size=1024, RF=1001, fracs=[1,0,0],
@@ -324,7 +325,7 @@ class DeepCpGDataModule(pl.LightningDataModule):
         self.nw = n_workers
         self.w = window
         self.max_dist = torch.tensor([max_dist],dtype=torch.float)
-        self.batch_pos = batch_pos
+        self.batch_pos = batch_pos # include position in batches, used in benchmarking
     def setup(self,stage):
         data = {'ind': [], 'X': [], 'repy': [],'reppos': [],
                 'pos': [], 'y': [], 'ix_rep': [], 'extra_rep': []}
@@ -467,7 +468,7 @@ class DeepCpGDataset(torch.utils.data.Dataset):
         
 # CaMelia
 class CaMeliaPreprocessor():
-    def __init__(self, X, y, pos, val_key=['chr5'], test_key=['chr10'], fracs=[1,0,0]):
+    def __init__(self, X, y, pos, val_keys=['chr5'], test_keys=['chr10'], fracs=[1,0,0]):
         assert len(fracs)==3,'length of fractions should be 3 for train/val/test'
         assert sum(fracs)==1, 'Sum of train/val/test fractions should be one.'
         assert val_keys is None or type(val_keys) is list, 'val_keys should be None or list'
@@ -500,7 +501,7 @@ class CaMeliaPreprocessor():
         features = X_padded[pos_subset[:,None]+range_]
         return self.ixtonuc_list[features] # convert indices to string
     
-    def local_cell_similarity_feature(self, chr_key, cell_index, nan_mode=True, threshold=0.8):
+    def local_cell_similarity_feature(self, chr_key, cell_index, threshold=0.8):
 
         indices_cell_index = self.y[chr_key][:,cell_index] != -1
         
@@ -543,7 +544,6 @@ class CaMeliaPreprocessor():
         range_ = np.concatenate([np.arange(-10,0), np.arange(1,11)])
         pos_indexer = np.array([10]*pos_subsets_padded.shape[0])
         cell_indexer= np.arange(pos_subsets_padded.shape[0])
-        t = time()
         features = np.full([len(pos_cell)], np.nan)
         for i in range(len(pos_cell)):
             matches = pos_subsets_padded[cell_indexer,pos_indexer] == pos_cell[i]
@@ -561,6 +561,7 @@ class CaMeliaPreprocessor():
 
             if i % 10000 == 0:
                 print('Progress encoding local sim. feat. for', chr_key, '...:', np.round(i/len(pos_cell)*100,2),'%', end='\r')
+        print('Progress encoding local sim. feat. for', chr_key, '...:', np.round(i+1/len(pos_cell)*100,2),'%', end='\r')
         print()
         
         return features.reshape(-1,1)
@@ -589,7 +590,7 @@ class CaMeliaPreprocessor():
         X_test = pd.DataFrame(); y_test = np.empty(0, dtype='int8')
         pos_val = np.empty(0, dtype='int32'); pos_test = np.empty(0, dtype='int32')
         
-        for chr_key in y.keys():
+        for chr_key in self.y.keys():
             indices_cell_index = self.y[chr_key][:,cell_index] != -1
             y_cell = self.y[chr_key][indices_cell_index, cell_index]
             

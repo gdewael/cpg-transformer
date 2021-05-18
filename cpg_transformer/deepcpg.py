@@ -8,7 +8,7 @@ from cpg_transformer.blocks import CnnL2h128, CnnL3h128, RnnL1, JointL2h512
     
 class DeepCpG(pl.LightningModule):
     def __init__(self, n_outputs, n_conv_layers=2, do_CNN=0, RF=1001,
-                 do_RNN=0, do_joint1=0, do_joint2=0,
+                 do_RNN=0, do_joint1=0, do_joint2=0, lr_decay_factor=0.95,
                  lr=1e-4, warmup_steps=10000):
         super().__init__()
 
@@ -46,9 +46,8 @@ class DeepCpG(pl.LightningModule):
         return self.out_lin(self.joint(torch.cat((DNA,CpG),-1)))
         
     def training_step(self, batch, batch_idx):
-        DNA, CpG, y, cov = batch
+        DNA, CpG, y = batch
         DNA, CpG, y = DNA.to(dtype=torch.long), CpG.to(dtype=self.dtype), y.to(dtype=self.dtype)
-        cov = cov.to(dtype=self.dtype)
         to_train_on = torch.where(y!=-1)
         y_hat = self(DNA, CpG)
         loss = F.binary_cross_entropy_with_logits(y_hat[to_train_on], y[to_train_on])
@@ -56,9 +55,8 @@ class DeepCpG(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        DNA, CpG, y, cov = batch
+        DNA, CpG, y = batch
         DNA, CpG, y = DNA.to(dtype=torch.long), CpG.to(dtype=self.dtype), y.to(dtype=self.dtype)
-        cov = cov.to(dtype=self.dtype)
         to_train_on = torch.where(y!=-1)
         y_hat = self(DNA, CpG)
         return torch.stack((y_hat[to_train_on], y[to_train_on]))
@@ -77,7 +75,7 @@ class DeepCpG(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=0.0001)
-        lambd = lambda epoch: 0.95
+        lambd = lambda epoch: self.hparams.lr_decay_factor
         lr_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optimizer, lr_lambda=lambd)
         return [optimizer], [lr_scheduler]
     
