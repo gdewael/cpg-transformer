@@ -191,6 +191,7 @@ optional arguments:
 
 
 <details><summary>DataModule arguments</summary>
+    
 ```
 DataModule:
   Data Module arguments
@@ -217,9 +218,11 @@ DataModule:
   --n_workers int       Number of worker threads to use in data loading. Increase if you
                         experience a CPU bottleneck. (default: 4)
 ```
+    
 </details>
 
 <details><summary>Model arguments</summary>
+    
 ```
 Model:
   CpG Transformer Hyperparameters
@@ -251,9 +254,11 @@ Model:
   --warmup_steps int    Number of steps over which the learning rate will linearly warm up.
                         (default: 1000)
 ```
+    
 </details>
 
 <details><summary>Logging arguments</summary>
+    
 ```
 Logging:
   Logging arguments
@@ -271,9 +276,11 @@ Logging:
   --patience int        Number of epochs to wait for a possible decrease in validation loss
                         before early stopping. (default: 10)
 ```
+    
 </details>
 
 <details><summary>PyTorch Lightning arguments</summary>
+    
 ```
 pl.Trainer:
   --logger [str_to_bool]
@@ -456,6 +463,7 @@ pl.Trainer:
                         <https://pytorch.org/blog/pytorch-1.6-now-includes-stochastic-weight-
                         averaging/>_` (default: False)
 ```
+    
 </details>
 
 ### Imputation and denoising

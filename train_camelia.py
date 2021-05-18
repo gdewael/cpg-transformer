@@ -1,6 +1,7 @@
 import numpy as np
 from argparse import ArgumentParser
 import argparse
+import os
 
 import torch
 import pytorch_lightning as pl
@@ -62,8 +63,13 @@ log_parse.add_argument('--log_folder', type=str, default='logfolder',
                        help='Folder where the model checkpoints will be saved.')
 log_parse.add_argument('--model_prefix', type=str, default='model_cell',
                        help='Prefix of the model names (one model for every cell). Models will be saved as "`model_prefix`00i.cbm" with i the cell index.')
+log_parse.add_argument('--catboost_info_dir', type=str, default='catboost_info',
+                       help='Folders in which to save catboost info logs, will be a subfolder of `--log_folder`.')
 
 args = parser.parse_args()
+
+if not os.path.exists(args.log_folder):
+    os.mkdir(args.log_folder)
 
 X = np.load(args.X)
 y = np.load(args.y)
@@ -82,7 +88,10 @@ for i in range(n_cells):
     preprocessor_outs = preprocessor(i, neigh=args.neigh, local=args.local,
                                      DNA=args.DNA, threshold=args.threshold)
     X_train, X_val, X_test, y_train, y_val, y_test, pos_val, pos_test = preprocessor_outs
+    args.log_folder.rstrip('/')+'/'+args.model_prefix+f"{i:03d}.cbm"
     model = CaMeliaModel(dropnans=args.dropnans, learning_rate=args.lr, max_depth=args.max_depth,
-                         verbose=args.verbose, eval_metric=args.eval_metric, device=args.device)
+                         verbose=args.verbose, eval_metric=args.eval_metric, device=args.device,
+                         train_dir=args.log_folder.rstrip('/')+'/'+args.catboost_info_dir.rstrip('/')+f"_{i:03d}")
     model.fit(X_train, y_train)
     model.save(args.log_folder.rstrip('/')+'/'+args.model_prefix+f"{i:03d}.cbm")
+    

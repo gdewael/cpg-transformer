@@ -561,7 +561,7 @@ class CaMeliaPreprocessor():
 
             if i % 10000 == 0:
                 print('Progress encoding local sim. feat. for', chr_key, '...:', np.round(i/len(pos_cell)*100,2),'%', end='\r')
-        print('Progress encoding local sim. feat. for', chr_key, '...:', np.round(i+1/len(pos_cell)*100,2),'%', end='\r')
+        print('Progress encoding local sim. feat. for', chr_key, '...:', np.round((i+1)/len(pos_cell)*100,2),'%', end='\r')
         print()
         
         return features.reshape(-1,1)

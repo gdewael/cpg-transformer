@@ -4,10 +4,10 @@ import numpy as np
 
 class CaMeliaModel():
     def __init__(self, dropnans=False, learning_rate=0.1, max_depth=7, verbose=100,
-                 eval_metric='AUC', device='GPU'):
+                 eval_metric='AUC', device='GPU', train_dir=None):
         self.dropnans = dropnans
         self.model = CatBoostClassifier(learning_rate=learning_rate, max_depth=max_depth,
-                                        verbose=verbose, eval_metric=eval_metric,
+                                        verbose=verbose, eval_metric=eval_metric, train_dir=train_dir,
                                         task_type=device, cat_features=['DNA'+str(i) for i in range(20)])
         
     def fit(self, X_train, y_train):    
