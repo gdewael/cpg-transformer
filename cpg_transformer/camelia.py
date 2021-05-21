@@ -16,6 +16,10 @@ class CaMeliaModel():
             X_train = X_train.iloc[drop]
             y_train = y_train[drop]
             
+        ix = np.arange(len(y_train))
+        np.random.shuffle(ix)
+        X_train, y_train = X_train.iloc[ix].reset_index(drop=True), y_train[ix]
+        
         self.model.fit(X_train, y_train)
         
     def test(self, X_test, y_test, pos_test, save_location):

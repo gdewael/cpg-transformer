@@ -27,7 +27,7 @@ parser.add_argument('y', type=str, metavar='y', help='NumPy file containing meth
 parser.add_argument('pos', type=str, metavar='pos', help='NumPy file containing positions of CpG sites.')
 
 dm_parse = parser.add_argument_group('DataModule', 'Data Module arguments')
-dm_parse.add_argument('--segment_size', type=int, default=1250,
+dm_parse.add_argument('--segment_size', type=int, default=1024,
                       help='Bin size in number of CpG sites (columns) that every batch will contain.')
 dm_parse.add_argument('--fracs', type=float, nargs='+', default=[1,0,0],
                       help='Fraction of every chromosome that will go to train, val, test respectively. Is ignored for chromosomes that occur in --val_keys or --test_keys.')

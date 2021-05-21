@@ -124,7 +124,7 @@ class CpGTransformerDataModule(pl.LightningDataModule):
     
     
 class CpGTransformerDataset(torch.utils.data.Dataset):
-    def __init__(self, split, RF=401, mask_percentage=0.15,
+    def __init__(self, split, RF=1001, mask_percentage=0.25,
                  mask_random_percentage=0.20, resample_cells=None):
         self.split = split
         
@@ -179,7 +179,102 @@ class CpGTransformerDataset(torch.utils.data.Dataset):
         return x_windows, y_orig, y_masked, pos, nonzeros, cell_indices
     
 
+# Imputing dataset. Makes overlapping segments.
+class CpGTransformerImputingDataModule(pl.LightningDataModule):
+    def __init__(self, X, y, pos, segment_size=1024, RF=1001, RF_TF=81,
+                 keys=None, n_workers=4):
+        assert keys is None or type(keys) is list, 'keys should be None or list'
+        super().__init__()
+        
+        self.X = X
+        self.y = y
+        self.pos = pos
+        self.segment_size = segment_size
+        self.RF = RF; self.RF2 = int((RF-1)/2)
+        self.RF_TF = RF_TF; self.RF2_TF = int((RF_TF-1)/2)
+        self.keys = keys
+        self.nw = n_workers
+        
+    def setup(self, stage):
+        
+        self.datasets_per_chr = dict()
+        
+        iterate = self.keys if self.keys is not None else self.y.keys()
+        for chr_name in iterate:
+            y_temp = self.y[chr_name]
+            X_temp = self.X[chr_name]
+            pos_temp = self.pos[chr_name]
 
+            if 'numpy' in str(type(X_temp)):
+                X_temp = torch.from_numpy(X_temp)
+                y_temp = torch.from_numpy(y_temp)
+                pos_temp = torch.from_numpy(pos_temp)
+
+
+            X_temp = torch.cat((torch.full((self.RF2,),4, dtype=torch.int8), X_temp,
+                                torch.full((self.RF2,),4, dtype=torch.int8)))
+            pos_temp = pos_temp.clone() + self.RF2
+
+            # mask gaps, deleting the parts of the genome where no CpG sites are labeled.
+            mask = torch.ones_like(X_temp, dtype=torch.bool)
+            for e, b in zip(pos_temp[1:][pos_temp[1:] - pos_temp[:-1] > self.RF],
+                            pos_temp[:-1][pos_temp[1:] - pos_temp[:-1] > self.RF]):
+                mask[torch.arange(b+self.RF2+1,e-self.RF2)] = False
+
+            tmp = torch.zeros_like(X_temp, dtype=torch.int8)
+            tmp[pos_temp.to(torch.long)] = 1
+            tmp = tmp[mask]
+            indices = torch.where(tmp)[0]
+            X_temp = X_temp[mask]
+
+
+            n_pos = len(pos_temp)
+            # prepare cuts that segment the genome & labels
+            cuts_ = torch.arange(0,n_pos-self.segment_size,self.segment_size-self.RF2_TF*2)
+            cuts = torch.tensor([(indices[i],indices[i+self.segment_size-1]) for i in cuts_])
+
+            batched_temp=[(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
+                       y_temp[i:i+self.segment_size],
+                       indices[i:i+self.segment_size]-indices[i]+self.RF2, 
+                       pos_temp[i:i+self.segment_size]-pos_temp[i]) for i, (srt, stp) in zip(cuts_, cuts)]
+
+            cut_last_ = cuts_[-1]+self.segment_size-self.RF2_TF*2
+            cut_last = torch.tensor([indices[cut_last_],indices[-1]])
+            srt, stp = cut_last
+
+            batched_temp += [(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
+                       y_temp[cut_last_:],
+                       indices[cut_last_:]-indices[cut_last_]+self.RF2, 
+                       pos_temp[cut_last_:]-pos_temp[cut_last_])]
+
+        
+            self.datasets_per_chr[chr_name] = torch.utils.data.DataLoader(
+                ImputingDataset(batched_temp, RF=self.RF),
+                num_workers = self.nw, shuffle=False, pin_memory=True)
+        
+# Imputing dataset. Makes overlapping segments.
+class ImputingDataset(torch.utils.data.Dataset):
+    def __init__(self, split, RF=1001):
+        self.split = split
+        
+        RF2 = int((RF-1)/2)
+        self.r = torch.arange(-RF2, RF2+1)
+        self.k = RF
+        
+    def __len__(self):
+        return len(self.split)
+    
+    def __getitem__(self, index):
+        x, y, ind, pos = self.split[index] 
+        
+        y += 1
+        
+        x_windows = x[ind.unsqueeze(1).repeat(1,self.k)+self.r]
+        cell_indices = torch.arange(y.shape[1])
+        
+        return x_windows, y, pos, cell_indices    
+
+    
     
     
 # Exhaustive testing. Only used in benchmarking, not in practical imputation.
@@ -309,7 +404,8 @@ class DeepCpGDataModule(pl.LightningDataModule):
     def __init__(self,X, y, pos, RF=1001, fracs=[1,0,0],
                  val_keys=None, test_keys=None,
                  batch_size=128, n_workers=4,
-                 window=25, max_dist=25000, batch_pos=False):
+                 window=25, max_dist=25000, batch_pos=False,
+                 batch_index=False):
         super().__init__()
         self.X = X
         self.y = y
@@ -326,6 +422,7 @@ class DeepCpGDataModule(pl.LightningDataModule):
         self.w = window
         self.max_dist = torch.tensor([max_dist],dtype=torch.float)
         self.batch_pos = batch_pos # include position in batches, used in benchmarking
+        self.batch_index = batch_index # include index in dataset in batches, used in imputation
     def setup(self,stage):
         data = {'ind': [], 'X': [], 'repy': [],'reppos': [],
                 'pos': [], 'y': [], 'ix_rep': [], 'extra_rep': []}
@@ -384,7 +481,7 @@ class DeepCpGDataModule(pl.LightningDataModule):
 
                 if row_positions % 5000 == 0:
                         print(chr_name, np.round(row_positions/n_cpgs*100,2),'%\t\t\t', end='\r')
-            print(chr_name, np.round(row_positions/n_cpgs*100,2),'%\t\t\t')
+            print(chr_name, np.round((row_positions+1)/n_cpgs*100,2),'%\t\t\t')
 
 
             if self.val_keys is not None and chr_name in self.val_keys:
@@ -411,8 +508,10 @@ class DeepCpGDataModule(pl.LightningDataModule):
         
         
         self.data = data
-        self.train = DeepCpGDataset(train, self.data, self.RF, self.w, self.max_dist, batch_pos=self.batch_pos)
-        self.val = DeepCpGDataset(val, self.data, self.RF, self.w, self.max_dist, batch_pos=self.batch_pos)
+        self.train = DeepCpGDataset(train, self.data, self.RF, self.w, self.max_dist,
+                                    batch_pos=self.batch_pos, batch_index=self.batch_index)
+        self.val = DeepCpGDataset(val, self.data, self.RF, self.w, self.max_dist,
+                                  batch_pos=self.batch_pos, batch_index=self.batch_index)
         self.test = test
         
         
@@ -425,7 +524,7 @@ class DeepCpGDataModule(pl.LightningDataModule):
                                            batch_size=self.bsz, shuffle=False, pin_memory=True)
     
 class DeepCpGDataset(torch.utils.data.Dataset):
-    def __init__(self, list_indices, data, RF, window, max_dist, batch_pos=False):
+    def __init__(self, list_indices, data, RF, window, max_dist, batch_pos=False, batch_index=False):
         self.list_indices = list_indices
         self.data = data
         self.RF = RF; self.RF2 = int((RF-1)/2)
@@ -435,6 +534,7 @@ class DeepCpGDataset(torch.utils.data.Dataset):
         self.b = torch.arange(-window,0)
         self.a = torch.arange(0,window)
         self.batch_pos = batch_pos
+        self.batch_index = batch_index
     def __len__(self):
         return len(self.list_indices)
 
@@ -454,16 +554,23 @@ class DeepCpGDataset(torch.utils.data.Dataset):
         CpG = torch.stack((torch.gather(self.data['repy'][ix_chr],1, indices).to(torch.float),
                      torch.gather(self.data['reppos'][ix_chr],1, indices).to(torch.float)),2).view(n_rep,-1)        
         
-        CpG[:,1:self.w*2:2] =torch.min((pos-CpG[:,1:self.w*2:2]).to(dtype=torch.float),
+        CpG[:,1:self.w*2:2] = torch.min((pos-CpG[:,1:self.w*2:2]).to(dtype=torch.float),
                                        self.max_dist)/self.max_dist
         CpG[:,self.w*2+1::2] = torch.min((CpG[:,self.w*2+1::2]-pos).to(dtype=torch.float),
                                  self.max_dist)/self.max_dist
        
         y = self.data['y'][ix_chr][ix_pos]
         if not self.batch_pos:
-            return DNA, CpG, y
+            if not self.batch_index:
+                return DNA, CpG, y
+            else:
+                return DNA, CpG, y, (ix_chr, ix_pos)
         else:
-            return DNA, CpG, y, pos
+            if not self.batch_index:
+                return DNA, CpG, y, pos
+            else:
+                return DNA, CpG, y, pos, (ix_chr, ix_pos)
+
         
         
 # CaMelia
@@ -491,8 +598,11 @@ class CaMeliaPreprocessor():
         ixtonuc = {v:k for k,v in nuctoix.items()}
         self.ixtonuc_list = np.array([ixtonuc[i] for i in range(16)])
         
-    def DNA_feature(self, chr_key, cell_index, n=10):
-        positions_to_use = self.y[chr_key][:,cell_index] != -1
+    def DNA_feature(self, chr_key, cell_index, n=10, whole_genome=False):
+        if not whole_genome:
+            positions_to_use = self.y[chr_key][:,cell_index] != -1
+        else:
+            positions_to_use = np.full(self.y[chr_key][:,cell_index].shape, True)
         pos_subset = self.pos[chr_key][positions_to_use]+n
         range_ = np.concatenate([np.arange(-n,0),np.arange(1,n+1)])
         
@@ -501,73 +611,113 @@ class CaMeliaPreprocessor():
         features = X_padded[pos_subset[:,None]+range_]
         return self.ixtonuc_list[features] # convert indices to string
     
-    def local_cell_similarity_feature(self, chr_key, cell_index, threshold=0.8):
+    def local_cell_similarity_feature(self, chr_key, cell_index, threshold=0.8, whole_genome=False):
+        if not whole_genome:
+            target_sites = self.y[chr_key][:,cell_index] != -1
+        else:
+            target_sites = np.full(self.y[chr_key][:,cell_index].shape, True)
 
-        indices_cell_index = self.y[chr_key][:,cell_index] != -1
-        
-        select = np.full(self.y[chr_key].shape[1], True)
-        select[cell_index] = False
-        
-        pos_cell = self.pos[chr_key][indices_cell_index]
+        target_pos = self.pos[chr_key][target_sites]
 
-        y_cell_all = self.y[chr_key][:, cell_index]
-        y_cell = self.y[chr_key][indices_cell_index, cell_index]
-        y_other_cells = self.y[chr_key][:, select]
 
-        indices_other_cells = y_other_cells != -1
-        indices_other_cells_in_common = np.expand_dims(indices_cell_index,1) & indices_other_cells
-        
-        
-        pos_subsets= []
-        y_subsets = []
-        y_subsets_own_cell = []
-        for i in range(len(select)-1):
-            pos_subsets.append(self.pos[chr_key][indices_other_cells_in_common[:,i]])
-            y_subsets.append(y_other_cells[indices_other_cells_in_common[:,i],i])
-            y_subsets_own_cell.append(y_cell_all[indices_other_cells_in_common[:,i]])
+        other_cells_select = np.full(self.y[chr_key].shape[1], True)
+        other_cells_select[cell_index] = False
 
-        pos_subsets_padded = np.full((len(pos_subsets),
-                                      max([len(a) for a in pos_subsets])+20),
-                                      max([max(a) for a in pos_subsets if len(a)>0])+1)
-        for ix, p in enumerate(pos_subsets):
-            pos_subsets_padded[ix,10:10+len(p)] = p
-        pos_subsets_padded[:,:10] = 0
 
-        y_subsets_padded = np.full((len(pos_subsets), max([len(a) for a in pos_subsets])+20), -1)
-        for ix, p in enumerate(y_subsets):
-            y_subsets_padded[ix,10:10+len(p)] = p
+        y_all_cell = self.y[chr_key][:, cell_index]
+        y_all_other_cells = self.y[chr_key][:, other_cells_select]
 
-        y_subsets_padded_own = np.full((len(pos_subsets), max([len(a) for a in pos_subsets])+20), -2)
-        for ix, p in enumerate(y_subsets_own_cell):
-            y_subsets_padded_own[ix,10:10+len(p)] = p
-        
-        range_ = np.concatenate([np.arange(-10,0), np.arange(1,11)])
-        pos_indexer = np.array([10]*pos_subsets_padded.shape[0])
-        cell_indexer= np.arange(pos_subsets_padded.shape[0])
-        features = np.full([len(pos_cell)], np.nan)
-        for i in range(len(pos_cell)):
-            matches = pos_subsets_padded[cell_indexer,pos_indexer] == pos_cell[i]
-            if matches.sum() > 0:
-                row_to_select = np.where(matches)[0]
-                col_to_select = pos_indexer[row_to_select]
-                L_k = y_subsets_padded[row_to_select[:,None],np.expand_dims(col_to_select,1)+range_]
-                L_target = y_subsets_padded_own[row_to_select[:,None],np.expand_dims(col_to_select,1)+range_]
-                CpG_k_target = y_subsets_padded[row_to_select,col_to_select]
-                PS_k = (L_k == L_target).sum(-1)/20
-                PS_k_threshold = PS_k > threshold
-                if PS_k_threshold.sum() > 0:
-                    features[i] = np.sum(PS_k[PS_k_threshold]*np.log2(CpG_k_target[PS_k_threshold]+1.01))/PS_k_threshold.sum()
+        observed_cell_ix = y_all_cell != -1
+        observed_other_cells_ix = y_all_other_cells != -1
+
+
+        pos_observed_target = np.concatenate([self.pos[chr_key][observed_cell_ix],np.array([-1])])
+
+        pos_observed_cells = []
+        y_observed_cells = []
+        for i in range(len(other_cells_select)-1):
+            slct_observed = observed_other_cells_ix[:,i] & target_sites
+            pos_observed_cells.append(self.pos[chr_key][slct_observed])
+            y_observed_cells.append(y_all_other_cells[slct_observed,i])
+
+        pos_observed_cells_padded = np.full((len(pos_observed_cells), max([len(a) for a in pos_observed_cells])+1), -1)
+        for ix, p in enumerate(pos_observed_cells):
+            pos_observed_cells_padded[ix,:len(p)] = p
+
+        y_observed_cells_padded = np.full((len(y_observed_cells), max([len(a) for a in y_observed_cells])+1), -1)
+        for ix, p in enumerate(y_observed_cells):
+            y_observed_cells_padded[ix,:len(p)] = p        
+
+
+        observed_other_cells_in_common = np.expand_dims(observed_cell_ix,1) & observed_other_cells_ix
+        pos_pairs = []
+        y_other_cells_pairs = []
+        y_cell_pairs = []
+        for i in range(len(other_cells_select)-1):
+            pos_pairs.append(self.pos[chr_key][observed_other_cells_in_common[:,i]])
+            y_other_cells_pairs.append(y_all_other_cells[observed_other_cells_in_common[:,i],i])
+            y_cell_pairs.append(y_all_cell[observed_other_cells_in_common[:,i]])
+
+        pos_pairs_padded = np.full((len(pos_pairs), max([len(a) for a in pos_pairs])+20),
+                                      max([max(a) for a in pos_pairs if len(a)>0])+1)
+
+        for ix, p in enumerate(pos_pairs):
+            pos_pairs_padded[ix,10:10+len(p)] = p
+        pos_pairs_padded[:,:10] = 0
+
+        y_other_cells_pairs_padded = np.full((len(pos_pairs), max([len(a) for a in pos_pairs])+20), -1)
+        for ix, p in enumerate(y_other_cells_pairs):
+            y_other_cells_pairs_padded[ix,10:10+len(p)] = p
+
+        y_cell_pairs_padded = np.full((len(pos_pairs), max([len(a) for a in pos_pairs])+20), -2)
+        for ix, p in enumerate(y_cell_pairs):
+            y_cell_pairs_padded[ix,10:10+len(p)] = p
+
+        #fixed
+        range_1 = np.concatenate([np.arange(-10,0), np.arange(1,11)])
+        range_2 = np.arange(-10,10)
+        cell_indexer = np.arange(pos_pairs_padded.shape[0])
+        #changes throughout iteration
+        pos_indexer = np.array([10]*pos_pairs_padded.shape[0])
+        pos_indexer2 = np.array([0]*pos_pairs_padded.shape[0])
+        ticker_pos_obs_t = 0
+
+        features = np.full([len(target_pos)], np.nan)
+
+        for i in range(len(target_pos)):
+
+            matches = pos_observed_cells_padded[cell_indexer, pos_indexer2] == target_pos[i]
+            is_observed = target_pos[i] == pos_observed_target[ticker_pos_obs_t]
+            range_ = range_1 if is_observed else range_2
+            row_to_select = np.where(matches)[0]
+            col_to_select = pos_indexer[row_to_select]
+            L_k = y_other_cells_pairs_padded[row_to_select[:,None],np.expand_dims(col_to_select,1)+range_]
+            L_target = y_cell_pairs_padded[row_to_select[:,None],np.expand_dims(col_to_select,1)+range_]
+            PS_k = (L_k == L_target).sum(-1)/20
+            PS_k_threshold = PS_k > threshold
+            if PS_k_threshold.sum() > 0:
+                CpG_k_target = y_observed_cells_padded[row_to_select,pos_indexer2[row_to_select]]
+                features[i] = np.sum(PS_k[PS_k_threshold]*np.log2(CpG_k_target[PS_k_threshold]+1.01))/PS_k_threshold.sum()
+
+            if is_observed:
                 pos_indexer += matches
+                ticker_pos_obs_t += 1
+            pos_indexer2 += matches
+
 
             if i % 10000 == 0:
-                print('Progress encoding local sim. feat. for', chr_key, '...:', np.round(i/len(pos_cell)*100,2),'%', end='\r')
-        print('Progress encoding local sim. feat. for', chr_key, '...:', np.round((i+1)/len(pos_cell)*100,2),'%', end='\r')
+                print('Progress encoding local sim. feat. for', chr_key, '...:', np.round(i/len(target_pos)*100,2),'%', end='\r')
+        print('Progress encoding local sim. feat. for', chr_key, '...:', np.round((i+1)/len(target_pos)*100,2),'%', end='\r')
         print()
-        
+
         return features.reshape(-1,1)
     
-    def neighbor_methylation_feature(self, chr_key, cell_index):
-        positions_to_use = self.y[chr_key][:,cell_index] != -1
+    def neighbor_methylation_feature(self, chr_key, cell_index, whole_genome=False):
+        if not whole_genome:
+            positions_to_use = self.y[chr_key][:,cell_index] != -1
+        else:
+            positions_to_use = np.full(self.y[chr_key][:,cell_index].shape, True)
+            
         pos_subset = self.pos[chr_key][positions_to_use]
         # for the edge cases we fill in a fake position corresponding to the max position that will be encountered in their windows
         pos_subset = np.concatenate((np.full([10], pos_subset[0]*2-pos_subset[10]),
@@ -584,7 +734,7 @@ class CaMeliaPreprocessor():
 
         features = features[[True]*10+[False]+[True]*10].T # leave the middle row out: the row of the location itself.
         return features
-    def __call__(self, cell_index, neigh=True, local=True, DNA=True, threshold=0.8):
+    def __call__(self, cell_index, neigh=True, local=True, DNA=True, threshold=0.8, whole_genome=False):
         X_train = pd.DataFrame(); y_train = np.empty(0, dtype='int8')
         X_val = pd.DataFrame(); y_val = np.empty(0, dtype='int8')
         X_test = pd.DataFrame(); y_test = np.empty(0, dtype='int8')
@@ -596,13 +746,13 @@ class CaMeliaPreprocessor():
             
             features_list = []
             if DNA:
-                DNA_feat = self.DNA_feature(chr_key, cell_index)
+                DNA_feat = self.DNA_feature(chr_key, cell_index, whole_genome=whole_genome)
                 features_list.append(pd.DataFrame(DNA_feat, columns=['DNA'+str(i) for i in range(20)]).astype('category'))
             if local:
-                local_feat = self.local_cell_similarity_feature(chr_key, cell_index,threshold=threshold)
+                local_feat = self.local_cell_similarity_feature(chr_key, cell_index,threshold=threshold, whole_genome=whole_genome)
                 features_list.append(pd.DataFrame(local_feat, columns = ['local']))
             if neigh:
-                neigh_feat = self.neighbor_methylation_feature(chr_key, cell_index)
+                neigh_feat = self.neighbor_methylation_feature(chr_key, cell_index, whole_genome=whole_genome)
                 features_list.append(pd.DataFrame(neigh_feat, columns=['neigh'+str(i) for i in range(20)]))
             dataframe = pd.concat(features_list,axis=1)
             pos_cell = self.pos[chr_key][indices_cell_index]

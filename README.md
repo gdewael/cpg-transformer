@@ -88,7 +88,7 @@ Since there is no consensus on default formatting of single-cell methylation pro
 'B': 14, 'X': 15}
 ```
 
-**(2)** `y.npz`. A partially observed methylation matrix as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 2D NumPy array corresponding to the methylation matrix for that chromosome. Every methylation matrix is a `# sites * # cells` matrix with every element at row `i` and column `j` denoting the methylation state of CpG site `i` of cell `j`. Methylation states are encoded by `-1 = unknown`, `0 = unmethylated`, `1 = methylated`
+**(2)** `y.npz`. A partially observed methylation matrix as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 2D NumPy array corresponding to the methylation matrix for that chromosome. Every methylation matrix is a `# sites * # cells` matrix with every element at row `i` and column `j` denoting the methylation state of CpG site `i` of cell `j`. Methylation states are encoded by `-1 = unknown`, `0 = unmethylated`, `1 = methylated`. For training, we recommend only including CpG sites where at least one cell has an observed state, as columns without observation confer no useful information when training.
 
 **(3)** `pos.npz`. Positions of all input CpG sites as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 1D NumPy array corresponding to the locations of all profiled CpG sites in that chromosome (columns in the second input).
 
@@ -124,7 +124,7 @@ For the datasets used in our paper, we provide template preprocessing scripts in
 
 Separate training scripts are provided for training CpG Transformer models `train_cpg_transformer.py`, DeepCpG `train_deepcpg.py` and CaMelia `train_camelia.py`. In the following, only the arguments to CpG Transformer will be discussed. For all scripts, arguments and their explanations can be accessed with the `-h` help flag.
 
-Arguments to CpG Transformer are split into 4 groups: (1) `DataModule` arguments concern how the data will be preprocessed and loaded for the model to use, (2) `Model` arguments concern model architecture and training, (3) `Logging` arguments determine how the training process can be followed and where model weights will be saved and (4) `pl.Trainer` list all arguments to the PyTorch Lightning trainer object. Most of these arguments are not applicable to standard use of CpG Transformer but are kept in for full flexibility. For more information on arguments we refer to the [pl.Trainer documentation](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#).
+Arguments to CpG Transformer are split into 4 groups: (1) DataModule arguments concern how the data will be preprocessed and loaded for the model to use, (2) Model arguments concern model architecture and training, (3) Logging arguments determine how the training process can be followed and where model weights will be saved and (4) pl.Trainer arguments list all arguments to the PyTorch Lightning trainer object. Most of these arguments are not applicable to standard use of CpG Transformer but are kept in for full flexibility. For more information on arguments we refer to the [pl.Trainer documentation](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#).
 
 ```
 python train_cpg_transformer.py -h
@@ -279,7 +279,7 @@ Logging:
     
 </details>
 
-<details><summary>PyTorch Lightning arguments</summary>
+<details><summary>PyTorch Lightning Trainer arguments</summary>
     
 ```
 pl.Trainer:
@@ -471,6 +471,8 @@ pl.Trainer:
 CaMelia will only return predictions for unobserved sites, whereas DeepCpG and CpG Transformer will return predictions for all sites. Hence, the latter two models can additionally de-noise methylation matrices. It has to be noted that DeepCpG does not incorporate any denoising objective in its design, and therefore is expected to de-noise less accurately than CpG Transformer.
 
 Scrap previous paragraph want kga da int script steken ...
+
+In this implementation, I have tried my best to parallellize and vectorize any preprocessing operations. For CaMelia, its heavy preprocessing incurs a computational cost that slows imputation time considerably compared to CpG Transformer and DeepCpG.
 
 
 ### Benchmarking
