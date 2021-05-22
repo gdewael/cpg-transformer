@@ -33,7 +33,7 @@ A stand-alone version of our novel 2D self-attention mechanism is available at .
 | [Hemato](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE87197) | 122 | 88.85 | 89.16 | **90.37** |
 
 
-\* Results obtained with reproduced, optimized code, also listed in this repository.
+\* Results obtained with reproduced, optimized code, also found in this repository.
 
 
 ## Installation <a name="install"></a>
@@ -54,7 +54,7 @@ pip install pytorch-lightning==1.3.0 biopython pandas numpy
 git clone https://github.com/gdewael/cpg-transformer.git
 ```
 
-In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested up to Python 3.9.4, PyTorch 1.8.1, PyTorch Lightning 1.3.0.
+In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested with up to Python 3.9.4, PyTorch 1.8.1, PyTorch Lightning 1.3.0.
 
 For CaMelia training and imputation, additionally do:
 ```bash
@@ -125,9 +125,9 @@ For the datasets used in our paper, we provide template preprocessing scripts in
 
 ### Training <a name="train"></a>
 
-Separate training scripts are provided for training CpG Transformer models `train_cpg_transformer.py`, DeepCpG `train_deepcpg.py` and CaMelia `train_camelia.py`. In the following, only the arguments to CpG Transformer will be shown. For all scripts, arguments and their explanations can be accessed with the `-h` help flag.
+Separate training scripts are provided for training CpG Transformer models (`train_cpg_transformer.py`), DeepCpG (`train_deepcpg.py`) and CaMelia (`train_camelia.py`). In the following, only the arguments to CpG Transformer will be shown. For all scripts, arguments and their explanations can be accessed with the `-h` help flag.
 
-Arguments to CpG Transformer are split into 4 groups: (1) DataModule arguments concern how the data will be preprocessed and loaded for the model to use, (2) Model arguments concern model architecture and training, (3) Logging arguments determine how the training process can be followed and where model weights will be saved and (4) pl.Trainer arguments list all arguments to the PyTorch Lightning trainer object. Most of these arguments are not applicable to standard use of CpG Transformer but are kept in for full flexibility. For more information on arguments we refer to the [pl.Trainer documentation](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#).
+Arguments to CpG Transformer are split into 4 groups: (1) DataModule arguments concern how the data will be preprocessed and loaded for the model to use, (2) Model arguments concern model architecture and training, (3) Logging arguments determine how the training process can be followed and where model weights will be saved and (4) pl.Trainer arguments list all arguments to the PyTorch Lightning trainer object. Most of these arguments are not applicable to standard use of CpG Transformer but are kept in for full flexibility. For more information on pl.Trainer we refer its [documentation](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#).
 
 
 <details><summary>All train_cpg_transformer.py flags</summary>
@@ -475,14 +475,14 @@ pl.Trainer:
 
 ### Imputation and denoising <a name="impute"></a>
 
-Once a model is trained on already-observed sites, it can be used to impute unobserved sites as well. We provide `impute_genome.py` for genome-wide imputation using either CpG Transformer, DeepCpG or CaMelia models. For all methods, the same three inputs are expected as with the training scripts: `X.npz`, `y.npz` and `pos.npz`. In addition, an output location e.g. `output.npz` should be specified. By default, `impute_genome.py` will return model predictions for every chromosome. To change this behavior, chromosomes can also be selected based on the `--keys` flag. The script will also predict every site irregardless of whether they are observer or not. To modulate this behavior, the `--denoise` flag can be set to `False`. Doing this will make it so that the output file will only impute unobserved methylation states and not impute/denoise observed methylation states. It has to be noted that CpG Transformer is the only model to explicitly model denoising in its design (objective function). For more detailed information about additional flags, use `python impute_genome.py -h`.
+Once a model is trained on already-observed sites, it can be used to impute unobserved sites. We provide `impute_genome.py` for genome-wide imputation using either CpG Transformer, DeepCpG or CaMelia models. For all methods, the same three inputs are expected as with the training scripts: `X.npz`, `y.npz` and `pos.npz`. In addition, an output location e.g. `output.npz` should be specified. By default, `impute_genome.py` will return model predictions for every chromosome. To change this behavior, chromosomes can also be selected based on the `--keys` flag. The script will also predict every site irregardless of whether they are observer or not. To modulate this behavior, the `--denoise` flag can be set to `False`. Doing this will make it so that the output file will only impute unobserved methylation states and not impute/denoise observed methylation states. It has to be noted that CpG Transformer is the only model to explicitly model denoising in its design (objective function). For more detailed information about additional flags, use `python impute_genome.py -h`.
 
 In terms of speed, CpG Transformer and DeepCpG will be fastest (when using a GPU) and CaMelia slowest due to its heavy preprocessing. (I have tried my best to vectorize and parallellize as much as possible, any contributors interested in improving are welcome to open a pull request.)
 
 
 ### Benchmarking <a name="benchmark"></a>
 
-Because CpG Transformer masks and randomizes multiple CpG sites per batch, performances reported during training are negatively biased. In practical use (imputation), this forms no problem, as no masking takes place at this point. For benchmarking however, CaMelia and DeepCpG may have an unfair advantage because they do not train using masking strategies. To perform a fair comparison between all models a separate benchmarking script `benchmark.py` is provided for CpG Transformer. DeepCpG and CaMelia can just use the `impute_genome.py` script and specify one or more test chromosomes. It has to be noted that CpG Transformer was not designed to separately mask and predict sites like this. Consequently, the benchmark script may take a lot of time to run.
+Because CpG Transformer masks and randomizes multiple CpG sites per batch, performances reported during training are negatively biased. In practical use (imputation), this forms no problem, as no masking takes place at this point. For benchmarking however, CaMelia and DeepCpG may have an unfair advantage because they do not train using masking strategies. To perform a fair comparison between all models, a separate benchmarking script `benchmark.py` is provided for CpG Transformer. To benchmark DeepCpG and CaMelia, `impute_genome.py` script can be used with one or more test chromosomes specified. It has to be noted that CpG Transformer was not designed to separately mask and predict sites like this. Consequently, the benchmark script may take a lot of time to run.
 
 
 ### Interpretation <a name="interpret"></a>
@@ -493,11 +493,9 @@ Because CpG Transformer masks and randomizes multiple CpG sites per batch, perfo
 
 Pre-trained CpG Transformer models for all tested [datasets](#perf-comp) are available as PyTorch model state dicts in `data/model_checkpoints/`.
 
-
 ## Citation <a name="citation"></a>
 
 If you find this repository useful in your research, please consider citing following paper: **coming soon** <!-- TODO -->
-
 
 ## License <a name="license"></a>
 
