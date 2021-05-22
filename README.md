@@ -8,14 +8,15 @@ A stand-alone version of our novel 2D self-attention mechanism is available at .
 <details><summary>Table of contents</summary>
   
 - [Comparison of single-cell methylome imputation performance](#perf-comp)
+- [Installation](#install)
 - [Usage](#usage)
   - [Quick Start](#quickstart)
-  - [User Guide](#bulk-fasta)
-  - [Notebooks](#notebooks)
-- [Available Models and Datasets](#available)
-  - [Pre-trained Models](#available-models)
-  - [ESM Structural Split Dataset](#available-esmssd)
-  - [Pre-training Dataset Split](#available-pretraining-split)
+  - [Input formatting](#input)
+  - [Training](#train)
+  - [Imputation and denoising](#impute)
+  - [Benchmarking](#benchmark)
+  - [Interpretation](#interpret)
+- [Pre-trained models](#pretrained)
 - [Citation](#citation)
 - [License](#license)
 </details>
@@ -35,7 +36,7 @@ A stand-alone version of our novel 2D self-attention mechanism is available at .
 \* Results obtained with reproduced, optimized code, also listed in this repository.
 
 
-## Installation
+## Installation <a name="install"></a>
 
 CpG Transformer is implemented in [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning).
 
@@ -60,12 +61,12 @@ For CaMelia training and imputation, additionally do:
 pip install catboost
 ```
 
-If your machine does not have a GPU, we provide Google Colab transfer learning and imputation notebooks that run on Google cloud resources. (see Quick start) TODO link.
+If your machine does not have a GPU, we provide Google Colab transfer learning and imputation notebooks that run on Google cloud resources. (see [Quick Start](#quickstart)).
 
 
-## Usage
+## Usage <a name="usage"></a>
 
-### Quick Start
+### Quick Start  <a name="quickstart"></a>
 
 example dataset ...
 example training from scratch
@@ -73,10 +74,10 @@ example training from pre-trained model
 
 example final imputation
 
-Alternatively, Google Colab ...
+** Google colab notebooks coming soon ** <!-- TODO -->
 
 
-### Input formatting
+### Input formatting  <a name="input"></a>
 
 Since there is no consensus on default formatting of single-cell methylation profiling files, some python programming will be necessary to arrange data files in the right format. In this repo, we opt to use NumPy `.npz` zipped archive files as inputs. More specifically, CpG Transformer uses 3 input files:
 
@@ -120,11 +121,16 @@ array([  3000573,   3000725,   3000900, ..., 197194914, 197194986,
 
 For the datasets used in our paper, we provide template preprocessing scripts in the `data` folder, along with instructions on where to download all relevant data. If your data files follow the exact same format as in one of the used datasets, you will be able to use the pre-made scripts without having to program yourself.
 
-### Training 
+<!-- TODO simple script for simple tsv file inputs. also for converting np arrays to tsv files.-->
 
-Separate training scripts are provided for training CpG Transformer models `train_cpg_transformer.py`, DeepCpG `train_deepcpg.py` and CaMelia `train_camelia.py`. In the following, only the arguments to CpG Transformer will be discussed. For all scripts, arguments and their explanations can be accessed with the `-h` help flag.
+### Training <a name="train"></a>
+
+Separate training scripts are provided for training CpG Transformer models `train_cpg_transformer.py`, DeepCpG `train_deepcpg.py` and CaMelia `train_camelia.py`. In the following, only the arguments to CpG Transformer will be shown. For all scripts, arguments and their explanations can be accessed with the `-h` help flag.
 
 Arguments to CpG Transformer are split into 4 groups: (1) DataModule arguments concern how the data will be preprocessed and loaded for the model to use, (2) Model arguments concern model architecture and training, (3) Logging arguments determine how the training process can be followed and where model weights will be saved and (4) pl.Trainer arguments list all arguments to the PyTorch Lightning trainer object. Most of these arguments are not applicable to standard use of CpG Transformer but are kept in for full flexibility. For more information on arguments we refer to the [pl.Trainer documentation](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#).
+
+
+<details><summary>All train_cpg_transformer.py flags</summary>
 
 ```
 python train_cpg_transformer.py -h
@@ -189,6 +195,7 @@ optional arguments:
   -h, --help            show this help message and exit
 ```
 
+</details>
 
 <details><summary>DataModule arguments</summary>
     
@@ -466,40 +473,32 @@ pl.Trainer:
     
 </details>
 
-### Imputation and denoising
+### Imputation and denoising <a name="impute"></a>
 
-CaMelia will only return predictions for unobserved sites, whereas DeepCpG and CpG Transformer will return predictions for all sites. Hence, the latter two models can additionally de-noise methylation matrices. It has to be noted that DeepCpG does not incorporate any denoising objective in its design, and therefore is expected to de-noise less accurately than CpG Transformer.
+Once a model is trained on already-observed sites, it can be used to impute unobserved sites as well. We provide `impute_genome.py` for genome-wide imputation using either CpG Transformer, DeepCpG or CaMelia models. For all methods, the same three inputs are expected as with the training scripts: `X.npz`, `y.npz` and `pos.npz`. In addition, an output location e.g. `output.npz` should be specified. By default, `impute_genome.py` will return model predictions for every chromosome. To change this behavior, chromosomes can also be selected based on the `--keys` flag. The script will also predict every site irregardless of whether they are observer or not. To modulate this behavior, the `--denoise` flag can be set to `False`. Doing this will make it so that the output file will only impute unobserved methylation states and not impute/denoise observed methylation states. It has to be noted that CpG Transformer is the only model to explicitly model denoising in its design (objective function). For more detailed information about additional flags, use `python impute_genome.py -h`.
 
-Scrap previous paragraph want kga da int script steken ...
-
-In this implementation, I have tried my best to parallellize and vectorize any preprocessing operations. For CaMelia, its heavy preprocessing incurs a computational cost that slows imputation time considerably compared to CpG Transformer and DeepCpG.
+In terms of speed, CpG Transformer and DeepCpG will be fastest (when using a GPU) and CaMelia slowest due to its heavy preprocessing. (I have tried my best to vectorize and parallellize as much as possible, any contributors interested in improving are welcome to open a pull request.)
 
 
-### Benchmarking
+### Benchmarking <a name="benchmark"></a>
 
-Because CpG Transformer masks and randomizes multiple CpG sites per batch, training and validation performances reported during training are negatively biased. In practical use (imputation), this forms no problem, as no masking takes place at this point. For benchmarking however, CaMelia and DeepCpG may have an unfair advantage because they do not train using masking strategies. To perform a fair comparison, DeepCpG and CaMelia can just use the `impute_genome.py` script and specify one or more test chromosomes. For CpG Transformer, we provide a separate `benchmark.py` script. It has to be noted that CpG Transformer was not designed to separately mask and predict sites like this. Consequently, the benchmark script may take a lot of time to run.
-
-
+Because CpG Transformer masks and randomizes multiple CpG sites per batch, performances reported during training are negatively biased. In practical use (imputation), this forms no problem, as no masking takes place at this point. For benchmarking however, CaMelia and DeepCpG may have an unfair advantage because they do not train using masking strategies. To perform a fair comparison between all models a separate benchmarking script `benchmark.py` is provided for CpG Transformer. DeepCpG and CaMelia can just use the `impute_genome.py` script and specify one or more test chromosomes. It has to be noted that CpG Transformer was not designed to separately mask and predict sites like this. Consequently, the benchmark script may take a lot of time to run.
 
 
-### Interpretation
+### Interpretation <a name="interpret"></a>
 
+**Coming Soon** <!-- TODO -->
 
+## Pre-trained models <a name="pretrained"></a>
 
-## Pre-trained Models
-
-Pre-trained models are available as PyTorch Lightning `LightningModule` checkpoints in `data/model_checkpoints`
-
-
-
+Pre-trained CpG Transformer models for all tested [datasets](#perf-comp) are available as PyTorch model state dicts in `data/model_checkpoints/`.
 
 
 ## Citation <a name="citation"></a>
 
-If you find this repository useful in your research, please consider citing following paper:
+If you find this repository useful in your research, please consider citing following paper: **coming soon** <!-- TODO -->
 
 
 ## License <a name="license"></a>
 
-This source code is licensed under the MIT license found in the `LICENSE` file
-in the root directory of this source tree.
+This source code is licensed under the MIT license found in the `LICENSE` file in the root directory of this source tree.

@@ -320,10 +320,14 @@ class ExhaustiveBenchmarkDataset(torch.utils.data.Dataset):
         
         self.RF2 = RF2
         
-        self.list_indices = self.list_indices[self.list_indices[:,0]>=self.w]
-        self.list_indices = self.list_indices[self.list_indices[:,0]<self.data['y'].shape[0]-self.w]
         if self.output_rows is not None:
             self.list_indices = self.list_indices[(self.list_indices[:,1][...,None] == self.output_rows).any(-1)]
+        
+        self.edges = self.list_indices[self.list_indices[:,0]<self.w]
+        self.edges = torch.cat([self.edges, self.list_indices[self.list_indices[:,0]>=self.data['y'].shape[0]-self.w]])
+        
+        self.list_indices = self.list_indices[self.list_indices[:,0]>=self.w]
+        self.list_indices = self.list_indices[self.list_indices[:,0]<self.data['y'].shape[0]-self.w]
         
     def __len__(self):
         return self.list_indices.shape[0]
@@ -341,12 +345,30 @@ class ExhaustiveBenchmarkDataset(torch.utils.data.Dataset):
         else:
             cell_indices = torch.arange(y.shape[1])
         
-        y_true = self.data['y'][i, index_label]
         
         y_input = y+1
         y_input[i-max(0,i-self.w), index_label] = 0 
             
-        return DNA, y_input, y_true, pos, (i-max(0,i-self.w), index_label), cell_indices
+        return DNA, y_input, pos, (i, index_label), cell_indices
+    
+    def edge_getitem(self, index):
+        i, index_label = self.edges[index]
+        
+        
+        pos = self.data['pos'][max(0,i-self.w):i+self.w+1]
+        y = self.data['y'][max(0,i-self.w):i+self.w+1]
+        DNA = self.data['DNA'][max(0,i-self.w):i+self.w+1]
+        
+        if self.input_rows is not None:
+            cell_indices = self.input_rows.clone()
+        else:
+            cell_indices = torch.arange(y.shape[1])
+        
+        
+        y_input = y+1
+        y_input[i-max(0,i-self.w), index_label] = 0 
+            
+        return DNA, y_input, pos, (i, index_label), cell_indices
     
 # Exhaustive testing. Only used in benchmarking, not in practical imputation.
 class ExhaustiveBenchmarkDNAEmbedding(torch.utils.data.Dataset):
@@ -354,7 +376,7 @@ class ExhaustiveBenchmarkDNAEmbedding(torch.utils.data.Dataset):
     Works only for one chromosome at a time
     Meaning for every chromosome tested this way you need new object of this type.
     """
-    def __init__(self, X, pos, RF=401):
+    def __init__(self, X, pos, RF=1001):
         RF2 = int((RF-1)/2)
         
         if 'numpy' in str(type(X)):
@@ -388,7 +410,6 @@ class ExhaustiveBenchmarkDNAEmbedding(torch.utils.data.Dataset):
     
     def __getitem__(self, index):
         i = self.list_indices[index]
-        
         
         ind = self.data['indices'][i].unsqueeze(0)
         

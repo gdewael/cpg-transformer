@@ -50,7 +50,7 @@ dm_parse.add_argument('--n_workers', type=int, default=4,
 
 model_parse = parser.add_argument_group('Model', 'CpG Transformer Hyperparameters')
 model_parse.add_argument('--transfer_checkpoint', type=str, default=None,
-                         help='.ckpt file to transfer model weights from. If this argument is used, then all following model arguments will not be used.')
+                         help='.ckpt file to transfer model weights from. Has to be either a `.ckpt` pytorch lightning checkpoint or a `.pt` pytorch state_dict. If a `.ckpt` file is provided, then all following model arguments will not be used (apart from `--lr`). If a `.pt` file is provided, then all following model arguments HAVE to correspond to the arguments of the saved model. When doing transfer learning, a lower-than-default learning rate (`--lr`) is advised.')
 model_parse.add_argument('--RF', type=int, default=1001,
                          help='Receptive field of the underlying CNN.')
 model_parse.add_argument('--n_conv_layers', type=int, default=2,
@@ -114,9 +114,23 @@ n_cells = y[list(y.keys())[0]].shape[1]
 
 
 if args.transfer_checkpoint:
-    model = CpGTransformer.load_from_checkpoint(args.transfer_checkpoint)
-    model.cell_embed = torch.nn.Embedding(n_cells, model.hparams.cell_embed_size)
-    
+    assert args.transfer_checkpoint.endswith('.ckpt') or args.transfer_checkpoint.endswith('.pt'), 'Pretrained models should be a .ckpt or .pt file'
+    if args.transfer_checkpoint.endswith('.ckpt'):
+        model = CpGTransformer.load_from_checkpoint(lr=args.lr, args.transfer_checkpoint)
+        model.cell_embed = torch.nn.Embedding(n_cells, model.hparams.cell_embed_size)
+    else:
+        pretrained_model_state = torch.load(args.transfer_checkpoint)
+        n_cells_pretrained = pretrained_model_state['cell_embed.weight'].shape[0]
+        model = CpGTransformer(n_cells_pretrained, RF=args.RF, n_conv_layers=args.n_conv_layers, CNN_do=args.CNN_do,
+                       DNA_embed_size=args.DNA_embed_size, cell_embed_size=args.cell_embed_size,
+                       CpG_embed_size=args.CpG_embed_size, transf_hsz=args.transf_hsz,
+                       transf_do=args.transf_do, act=args.act, n_transformers=args.n_transformers,
+                       n_heads=args.n_heads, head_dim=args.head_dim, window=args.window,
+                       layernorm=args.layernorm, lr=args.lr, lr_decay_factor=args.lr_decay_factor,
+                       warmup_steps=args.warmup_steps)
+        model.load_state_dict(pretrained_model_state)
+        model.cell_embed = torch.nn.Embedding(n_cells, model.hparams.cell_embed_size)       
+        
 else:
     model = CpGTransformer(n_cells, RF=args.RF, n_conv_layers=args.n_conv_layers, CNN_do=args.CNN_do,
                        DNA_embed_size=args.DNA_embed_size, cell_embed_size=args.cell_embed_size,

@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from argparse import ArgumentParser
+import argparse
 
 def boolean(v):
     if isinstance(v, bool): return v
@@ -15,7 +16,7 @@ class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter,
 parser = ArgumentParser(description='Genome-wide imputation script. Outputs a methylation matrix in the same format as the input `y.npz`, where every element is a floating number between 0 and 1 representing the model prediction.' ,
                         formatter_class=CustomFormatter)
 
-parser.add_argument('model', choices=['cpg_transformer', 'deepcpg', 'camelia'],
+parser.add_argument('model', type=str, choices=['cpg_transformer', 'deepcpg', 'camelia'],
                     help='Which model type to use for imputation.')
 
 parser.add_argument('X', type=str, metavar='X', help='NumPy file (.npz) containing encoded genome.')
@@ -28,7 +29,7 @@ optional_parse = parser.add_argument_group('General optional arguments.')
 optional_parse.add_argument('--keys', type=str, nargs='+', default=None,
                             help='Only impute chromosomes corresponding to these keys.')
 optional_parse.add_argument('--denoise', type=boolean, default=True,
-                            help='If False, return the original methylation state for already-observed elements in the output. In other words: only unobserved elements will be imputed and observed sites will retain their original label always. If True, model predictions will be returned for all inputs, irregardless of whether they are are observed.')
+                            help='If False, return the original methylation state for already-observed elements in the output. In other words: only unobserved elements will be imputed and observed sites will retain their original label always. If True, model predictions will be returned for all inputs, irregardless of whether they are observed.')
 
 cpgtf_parse = parser.add_argument_group('CpG Transformer-specific arguments.',
                                         'These arguments are only relevant when imputing with CpG Transformer models.')
@@ -38,7 +39,7 @@ cpgtf_parse.add_argument('--segment_size', type=int, default=1024,
                          help='Bin size in number of CpG sites (columns) that every batch will contain.')
 cpgtf_parse.add_argument('--n_workers', type=int, default=4,
                       help='Number of worker threads to use in data loading. Increase if you experience a CPU bottleneck.')
-cpgtf_parse.add_argument('--device', type=str, choices=['CPU', 'GPU'], default='GPU,
+cpgtf_parse.add_argument('--device', type=str, choices=['CPU', 'GPU'], default='GPU',
                          help='GPU or CPU. For inference, it is currently only possible to use 1 GPU.')
 
 
@@ -50,7 +51,7 @@ deepcpg_parse.add_argument('--model_checkpoint_dpcpg', type=str, default=None,
                          help='.ckpt file containing the model to use.')
 deepcpg_parse.add_argument('--n_workers_dpcpg', type=int, default=4,
                       help='Number of worker threads to use in data loading. Increase if you experience a CPU bottleneck.')
-deepcpg_parse.add_argument('--device_dpcpg', type=str, choices=['CPU', 'GPU'], default='GPU,
+deepcpg_parse.add_argument('--device_dpcpg', type=str, choices=['CPU', 'GPU'], default='GPU',
                          help='GPU or CPU. For inference, it is currently only possible to use 1 GPU.')
 deepcpg_parse.add_argument('--window_dpcpg', type=int, default=25,
                       help='How many sites to use up and downstream to make up local context in RNN. The same value used in training should be used.')
@@ -73,8 +74,6 @@ camelia_parse.add_argument('--no_nan_pred', type=boolean, default=False,
                       help='Corresponds to the --dropnans argument in `train_camelia.py`. script. If True, will not predict sites that have an undefined locally paired similarity feature. In the final imputed matrix, these sites will have an `-1` output.')
 camelia_parse.add_argument('--batch_size_camelia', type=int, default=50000,
                          help='Number of CpG sites per cell to impute in parallel.')
-
-# nanmode: return only predictions for positions for which the locally paired similarity feature is defined.
 
 args = parser.parse_args()
 
