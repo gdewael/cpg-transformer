@@ -34,7 +34,7 @@ optional_parse.add_argument('--denoise', type=boolean, default=True,
 cpgtf_parse = parser.add_argument_group('CpG Transformer-specific arguments.',
                                         'These arguments are only relevant when imputing with CpG Transformer models.')
 cpgtf_parse.add_argument('--model_checkpoint', type=str, default=None,
-                         help='.ckpt file containing the model to use.')
+                         help='.ckpt file containing the model to use. DOES NOT WORK WITH .pt STATE DICT FILES.')
 cpgtf_parse.add_argument('--segment_size', type=int, default=1024,
                          help='Bin size in number of CpG sites (columns) that every batch will contain.')
 cpgtf_parse.add_argument('--n_workers', type=int, default=4,

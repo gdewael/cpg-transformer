@@ -28,7 +28,7 @@ parser.add_argument('pos', type=str, metavar='pos', help='NumPy file containing 
 
 dm_parse = parser.add_argument_group('DataModule', 'Data Module arguments')
 dm_parse.add_argument('--segment_size', type=int, default=1024,
-                      help='Bin size in number of CpG sites (columns) that every batch will contain.')
+                      help='Bin size in number of CpG sites (columns) that every batch will contain. If GPU memory is exceeded, this option can be lowered.')
 dm_parse.add_argument('--fracs', type=float, nargs='+', default=[1,0,0],
                       help='Fraction of every chromosome that will go to train, val, test respectively. Is ignored for chromosomes that occur in --val_keys or --test_keys.')
 dm_parse.add_argument('--mask_p', type=float, default=0.25,
@@ -36,15 +36,15 @@ dm_parse.add_argument('--mask_p', type=float, default=0.25,
 dm_parse.add_argument('--mask_random_p', type=float, default=0.20,
                       help='The percentage of masked sites to instead randomize.')
 dm_parse.add_argument('--resample_cells', type=int, default=None,
-                      help='Whether to resample cells every training batch. Reduces complexity.')
+                      help='Whether to resample cells every training batch. Reduces complexity. If GPU memory is exceeded, this option can be used.')
 dm_parse.add_argument('--resample_cells_val', type=int, default=None, 
-                      help='Whether to resample cells every validation batch.')
+                      help='Whether to resample cells every validation batch. If GPU memory is exceeded, this option can be used.')
 dm_parse.add_argument('--val_keys', type=str, nargs='+', default=['chr5'],
                       help='Names/keys of validation chromosomes.')
 dm_parse.add_argument('--test_keys', type=str, nargs='+', default=['chr10'], 
                       help='Names/keys of test chromosomes.')
 dm_parse.add_argument('--batch_size', type=int, default=1,
-                      help='Batch size')
+                      help='Batch size.')
 dm_parse.add_argument('--n_workers', type=int, default=4,
                       help='Number of worker threads to use in data loading. Increase if you experience a CPU bottleneck.')
 
@@ -116,7 +116,7 @@ n_cells = y[list(y.keys())[0]].shape[1]
 if args.transfer_checkpoint:
     assert args.transfer_checkpoint.endswith('.ckpt') or args.transfer_checkpoint.endswith('.pt'), 'Pretrained models should be a .ckpt or .pt file'
     if args.transfer_checkpoint.endswith('.ckpt'):
-        model = CpGTransformer.load_from_checkpoint(lr=args.lr, args.transfer_checkpoint)
+        model = CpGTransformer.load_from_checkpoint(args.transfer_checkpoint, lr=args.lr)
         model.cell_embed = torch.nn.Embedding(n_cells, model.hparams.cell_embed_size)
     else:
         pretrained_model_state = torch.load(args.transfer_checkpoint)

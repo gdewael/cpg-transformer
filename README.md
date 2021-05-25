@@ -68,11 +68,17 @@ If your machine does not have a GPU, we provide Google Colab transfer learning a
 
 ### Quick Start  <a name="quickstart"></a>
 
-example dataset ...
-example training from scratch
-example training from pre-trained model
 
-example final imputation
+To quickly test out CpG Transformer, we provide Google Drive access to the preprocessed files for the Ser dataset, which can be downloaded [here](https://drive.google.com/drive/folders/1zNvyOX0F0ztDFEsgwaeTdsxJYo0_fQgg).
+
+```bash
+python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 # train from scratch with one gpu
+python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 2 --accelerator ddp # train with multiple gpus
+python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 --transfer_checkpoint data/model_checkpoints/Ser_model.pt # transfer learning
+
+
+python impute_genome.py cpg_transformer X_ser.npz y_ser.npz pos_ser.npz --model_checkpoint path/to/saved/model.ckpt
+```
 
 ** Google colab notebooks coming soon ** <!-- TODO -->
 
@@ -137,15 +143,14 @@ python train_cpg_transformer.py -h
 usage: train_cpg_transformer.py [-h] [--segment_size int] [--fracs float [float ...]]
                                 [--mask_p float] [--mask_random_p float] [--resample_cells int]
                                 [--resample_cells_val int] [--val_keys str [str ...]]
-                                [--test_keys str [str ...]] [--batch_size int]
-                                [--n_workers int] [--transfer_checkpoint str] [--RF int]
-                                [--n_conv_layers int] [--DNA_embed_size int]
-                                [--cell_embed_size int] [--CpG_embed_size int]
-                                [--n_transformers int] [--act str] [--transf_hsz int]
-                                [--n_heads int] [--head_dim int] [--window int]
-                                [--layernorm boolean] [--CNN_do float] [--transf_do float]
-                                [--lr float] [--lr_decay_factor float] [--warmup_steps int]
-                                [--tensorboard boolean] [--log_folder str]
+                                [--test_keys str [str ...]] [--batch_size int] [--n_workers int]
+                                [--transfer_checkpoint str] [--RF int] [--n_conv_layers int]
+                                [--DNA_embed_size int] [--cell_embed_size int]
+                                [--CpG_embed_size int] [--n_transformers int] [--act str]
+                                [--transf_hsz int] [--n_heads int] [--head_dim int]
+                                [--window int] [--layernorm boolean] [--CNN_do float]
+                                [--transf_do float] [--lr float] [--lr_decay_factor float]
+                                [--warmup_steps int] [--tensorboard boolean] [--log_folder str]
                                 [--experiment_name str] [--earlystop boolean] [--patience int]
                                 [--logger [str_to_bool]] [--checkpoint_callback [str_to_bool]]
                                 [--default_root_dir str] [--gradient_clip_val float]
@@ -154,8 +159,8 @@ usage: train_cpg_transformer.py [-h] [--segment_size int] [--fracs float [float 
                                 [--gpus _gpus_allowed_type] [--auto_select_gpus [str_to_bool]]
                                 [--tpu_cores _gpus_allowed_type] [--log_gpu_memory str]
                                 [--progress_bar_refresh_rate int]
-                                [--overfit_batches _int_or_float_type]
-                                [--track_grad_norm float] [--check_val_every_n_epoch int]
+                                [--overfit_batches _int_or_float_type] [--track_grad_norm float]
+                                [--check_val_every_n_epoch int]
                                 [--fast_dev_run [str_to_bool_or_int]]
                                 [--accumulate_grad_batches int] [--max_epochs int]
                                 [--min_epochs int] [--max_steps int] [--min_steps int]
@@ -177,8 +182,7 @@ usage: train_cpg_transformer.py [-h] [--segment_size int] [--fracs float [float 
                                 [--terminate_on_nan [str_to_bool]]
                                 [--auto_scale_batch_size [str_to_bool_or_str]]
                                 [--prepare_data_per_node [str_to_bool]] [--plugins str]
-                                [--amp_backend str] [--amp_level str]
-                                [--distributed_backend str]
+                                [--amp_backend str] [--amp_level str] [--distributed_backend str]
                                 [--move_metrics_to_cpu [str_to_bool]]
                                 [--multiple_trainloader_mode str]
                                 [--stochastic_weight_avg [str_to_bool]]
@@ -203,8 +207,8 @@ optional arguments:
 DataModule:
   Data Module arguments
 
-  --segment_size int    Bin size in number of CpG sites (columns) that every batch will
-                        contain. (default: 1250)
+  --segment_size int    Bin size in number of CpG sites (columns) that every batch will contain.
+                        If GPU memory is exceeded, this option can be lowered. (default: 1024)
   --fracs float [float ...]
                         Fraction of every chromosome that will go to train, val, test
                         respectively. Is ignored for chromosomes that occur in --val_keys or
@@ -213,15 +217,16 @@ DataModule:
                         columns in the batch. (default: 0.25)
   --mask_random_p float
                         The percentage of masked sites to instead randomize. (default: 0.2)
-  --resample_cells int  Whether to resample cells every training batch. Reduces complexity.
-                        (default: None)
+  --resample_cells int  Whether to resample cells every training batch. Reduces complexity. If
+                        GPU memory is exceeded, this option can be used. (default: None)
   --resample_cells_val int
-                        Whether to resample cells every validation batch. (default: None)
+                        Whether to resample cells every validation batch. If GPU memory is
+                        exceeded, this option can be used. (default: None)
   --val_keys str [str ...]
                         Names/keys of validation chromosomes. (default: ['chr5'])
   --test_keys str [str ...]
                         Names/keys of test chromosomes. (default: ['chr10'])
-  --batch_size int      Batch size (default: 1)
+  --batch_size int      Batch size. (default: 1)
   --n_workers int       Number of worker threads to use in data loading. Increase if you
                         experience a CPU bottleneck. (default: 4)
 ```
@@ -235,8 +240,13 @@ Model:
   CpG Transformer Hyperparameters
 
   --transfer_checkpoint str
-                        .ckpt file to transfer model weights from. If this argument is used,
-                        then all following model arguments will not be used. (default: None)
+                        .ckpt file to transfer model weights from. Has to be either a `.ckpt`
+                        pytorch lightning checkpoint or a `.pt` pytorch state_dict. If a `.ckpt`
+                        file is provided, then all following model arguments will not be used
+                        (apart from `--lr`). If a `.pt` file is provided, then all following
+                        model arguments HAVE to correspond to the arguments of the saved model.
+                        When doing transfer learning, a lower-than-default learning rate (`--lr`)
+                        is advised. (default: None)
   --RF int              Receptive field of the underlying CNN. (default: 1001)
   --n_conv_layers int   Number of convolutional layers, only 2 or 3 are possible. (default: 2)
   --DNA_embed_size int  Output embedding hidden size of the CNN. (default: 32)
@@ -249,8 +259,7 @@ Model:
   --transf_hsz int      Hidden dimension size in the transformer. (default: 64)
   --n_heads int         Number of self-attention heads. (default: 8)
   --head_dim int        Hidden dimensionality of each head. (default: 8)
-  --window int          Window size of 2D sliding window attention, should be odd. (default:
-                        21)
+  --window int          Window size of 2D sliding window attention, should be odd. (default: 21)
   --layernorm boolean   Whether to apply layernorm in transformer modules. (default: True)
   --CNN_do float        Dropout rate in the CNN to embed DNA context. (default: 0.0)
   --transf_do float     Dropout rate on the self-attention matrix. (default: 0.2)
@@ -274,12 +283,12 @@ Logging:
                         Whether to use tensorboard. If True, then training progress can be
                         followed by using (1) `tensorboard --logdir logfolder/` in a separate
                         terminal and (2) accessing at localhost:6006. (default: True)
-  --log_folder str      Folder where the tensorboard logs will be saved. Will additinally
-                        contain saved model checkpoints. (default: logfolder)
+  --log_folder str      Folder where the tensorboard logs will be saved. Will additinally contain
+                        saved model checkpoints. (default: logfolder)
   --experiment_name str
                         Name of the run within the log folder. (default: experiment)
-  --earlystop boolean   Whether to use early stopping after the validation loss has not
-                        decreased for `patience` epochs. (default: True)
+  --earlystop boolean   Whether to use early stopping after the validation loss has not decreased
+                        for `patience` epochs. (default: True)
   --patience int        Number of epochs to wait for a possible decrease in validation loss
                         before early stopping. (default: 10)
 ```
@@ -315,8 +324,8 @@ pl.Trainer:
   --num_processes int   number of processes for distributed training with
                         distributed_backend="ddp_cpu" (default: 1)
   --gpus _gpus_allowed_type
-                        number of gpus to train on (int) or which GPUs to train on (list or
-                        str) applied per node (default: None)
+                        number of gpus to train on (int) or which GPUs to train on (list or str)
+                        applied per node (default: None)
   --auto_select_gpus [str_to_bool]
                         If enabled and `gpus` is an integer, pick available gpus automatically.
                         This is especially useful when GPUs are configured to be in "exclusive
@@ -342,14 +351,13 @@ pl.Trainer:
                         Check val every n train epochs. (default: 1)
   --fast_dev_run [str_to_bool_or_int]
                         runs n if set to ``n`` (int) else 1 if set to ``True`` batch(es) of
-                        train, val and test to find any bugs (ie: a sort of unit test).
-                        (default: False)
+                        train, val and test to find any bugs (ie: a sort of unit test). (default:
+                        False)
   --accumulate_grad_batches int
-                        Accumulates grads every k batches or as set up in the dict. (default:
-                        1)
-  --max_epochs int      Stop training once this number of epochs is reached. Disabled by
-                        default (None). If both max_epochs and max_steps are not specified,
-                        defaults to ``max_epochs`` = 1000. (default: None)
+                        Accumulates grads every k batches or as set up in the dict. (default: 1)
+  --max_epochs int      Stop training once this number of epochs is reached. Disabled by default
+                        (None). If both max_epochs and max_steps are not specified, defaults to
+                        ``max_epochs`` = 1000. (default: None)
   --min_epochs int      Force training for at least these many epochs. Disabled by default
                         (None). If both min_epochs and min_steps are not specified, defaults to
                         ``min_epochs`` = 1. (default: None)
@@ -360,8 +368,8 @@ pl.Trainer:
   --max_time str        Stop training after this amount of time has passed. Disabled by default
                         (None). The time duration can be specified in the format DD:HH:MM:SS
                         (days, hours, minutes seconds), as a :class:`datetime.timedelta`, or a
-                        dictionary with keys that will be passed to
-                        :class:`datetime.timedelta`. (default: None)
+                        dictionary with keys that will be passed to :class:`datetime.timedelta`.
+                        (default: None)
   --limit_train_batches _int_or_float_type
                         How much of training dataset to check (float = fraction, int =
                         num_batches) (default: 1.0)
@@ -376,43 +384,40 @@ pl.Trainer:
                         num_batches) (default: 1.0)
   --val_check_interval _int_or_float_type
                         How often to check the validation set. Use float to check within a
-                        training epoch, use int to check every n steps (batches). (default:
-                        1.0)
+                        training epoch, use int to check every n steps (batches). (default: 1.0)
   --flush_logs_every_n_steps int
-                        How often to flush logs to disk (defaults to every 100 steps).
-                        (default: 100)
+                        How often to flush logs to disk (defaults to every 100 steps). (default:
+                        100)
   --log_every_n_steps int
-                        How often to log within steps (defaults to every 50 steps). (default:
-                        50)
-  --accelerator str     Previously known as distributed_backend (dp, ddp, ddp2, etc...). Can
-                        also take in an accelerator object for custom hardware. (default: None)
+                        How often to log within steps (defaults to every 50 steps). (default: 50)
+  --accelerator str     Previously known as distributed_backend (dp, ddp, ddp2, etc...). Can also
+                        take in an accelerator object for custom hardware. (default: None)
   --sync_batchnorm [str_to_bool]
                         Synchronize batch norm layers between process groups/whole world.
                         (default: False)
-  --precision int       Double precision (64), full precision (32) or half precision (16). Can
-                        be used on CPU, GPU or TPUs. (default: 32)
+  --precision int       Double precision (64), full precision (32) or half precision (16). Can be
+                        used on CPU, GPU or TPUs. (default: 32)
   --weights_summary str
                         Prints a summary of the weights when training begins. (default: top)
   --weights_save_path str
                         Where to save weights if specified. Will override default_root_dir for
                         checkpoints only. Use this if for whatever reason you need the
                         checkpoints stored in a different place than the logs written in
-                        `default_root_dir`. Can be remote file paths such as
-                        `s3://mybucket/path` or 'hdfs://path/' Defaults to `default_root_dir`.
-                        (default: None)
+                        `default_root_dir`. Can be remote file paths such as `s3://mybucket/path`
+                        or 'hdfs://path/' Defaults to `default_root_dir`. (default: None)
   --num_sanity_val_steps int
                         Sanity check runs n validation batches before starting the training
-                        routine. Set it to `-1` to run all batches in all validation
-                        dataloaders. (default: 2)
+                        routine. Set it to `-1` to run all batches in all validation dataloaders.
+                        (default: 2)
   --truncated_bptt_steps int
-                        Deprecated in v1.3 to be removed in 1.5. Please use :paramref:`~pytorch
-                        _lightning.core.lightning.LightningModule.truncated_bptt_steps`
-                        instead. (default: None)
+                        Deprecated in v1.3 to be removed in 1.5. Please use :paramref:`~pytorch_l
+                        ightning.core.lightning.LightningModule.truncated_bptt_steps` instead.
+                        (default: None)
   --resume_from_checkpoint str
-                        Path/URL of the checkpoint from which training is resumed. If there is
-                        no checkpoint file at the path, start from scratch. If resuming from
-                        mid-epoch checkpoint, training will start from the beginning of the
-                        next epoch. (default: None)
+                        Path/URL of the checkpoint from which training is resumed. If there is no
+                        checkpoint file at the path, start from scratch. If resuming from mid-
+                        epoch checkpoint, training will start from the beginning of the next
+                        epoch. (default: None)
   --profiler str        To profile individual steps during training and assist in identifying
                         bottlenecks. (default: None)
   --benchmark [str_to_bool]
@@ -424,20 +429,20 @@ pl.Trainer:
   --auto_lr_find [str_to_bool_or_str]
                         If set to True, will make trainer.tune() run a learning rate finder,
                         trying to optimize initial learning for faster convergence.
-                        trainer.tune() method will set the suggested learning rate in self.lr
-                        or self.learning_rate in the LightningModule. To use a different key
-                        set a string instead of True with the key name. (default: False)
+                        trainer.tune() method will set the suggested learning rate in self.lr or
+                        self.learning_rate in the LightningModule. To use a different key set a
+                        string instead of True with the key name. (default: False)
   --replace_sampler_ddp [str_to_bool]
-                        Explicitly enables or disables sampler replacement. If not specified
-                        this will toggled automatically when DDP is used. By default it will
-                        add ``shuffle=True`` for train sampler and ``shuffle=False`` for
-                        val/test sampler. If you want to customize it, you can set
+                        Explicitly enables or disables sampler replacement. If not specified this
+                        will toggled automatically when DDP is used. By default it will add
+                        ``shuffle=True`` for train sampler and ``shuffle=False`` for val/test
+                        sampler. If you want to customize it, you can set
                         ``replace_sampler_ddp=False`` and add your own distributed sampler.
                         (default: True)
   --terminate_on_nan [str_to_bool]
                         If set to True, will terminate training (by raising a `ValueError`) at
-                        the end of each training batch, if any of the parameters or the loss
-                        are NaN or +/-inf. (default: False)
+                        the end of each training batch, if any of the parameters or the loss are
+                        NaN or +/-inf. (default: False)
   --auto_scale_batch_size [str_to_bool_or_str]
                         If set to True, will `initially` run a batch size finder trying to find
                         the largest batch size that fits into memory. The result will be stored
@@ -448,10 +453,9 @@ pl.Trainer:
   --prepare_data_per_node [str_to_bool]
                         If True, each LOCAL_RANK=0 will call prepare data. Otherwise only
                         NODE_RANK=0, LOCAL_RANK=0 will prepare data (default: True)
-  --plugins str         Plugins allow modification of core behavior like ddp and amp, and
-                        enable custom lightning plugins. (default: None)
-  --amp_backend str     The mixed precision backend to use ("native" or "apex") (default:
-                        native)
+  --plugins str         Plugins allow modification of core behavior like ddp and amp, and enable
+                        custom lightning plugins. (default: None)
+  --amp_backend str     The mixed precision backend to use ("native" or "apex") (default: native)
   --amp_level str       The optimization level to use (O1, O2, etc...). (default: O2)
   --distributed_backend str
                         deprecated. Please use 'accelerator' (default: None)
@@ -463,8 +467,8 @@ pl.Trainer:
                         How to loop over the datasets when there are multiple train loaders. In
                         'max_size_cycle' mode, the trainer ends one epoch when the largest
                         dataset is traversed, and smaller datasets reload when running out of
-                        their data. In 'min_size' mode, all the datasets reload when reaching
-                        the minimum length of datasets. (default: max_size_cycle)
+                        their data. In 'min_size' mode, all the datasets reload when reaching the
+                        minimum length of datasets. (default: max_size_cycle)
   --stochastic_weight_avg [str_to_bool]
                         Whether to use `Stochastic Weight Averaging (SWA)
                         <https://pytorch.org/blog/pytorch-1.6-now-includes-stochastic-weight-
