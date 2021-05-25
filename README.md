@@ -2,7 +2,7 @@
 
 This repository contains code, pre-trained models and instructions on how to use CpG Transformer **paper coming soon** <!-- TODO -->
 for imputation of single-cell methylomes.
-A stand-alone version of our novel 2D self-attention mechanism is available at [2Dslidingwindow-attention-pytorch](https://github.com/gdewael/2Dslidingwindow-attention-pytorch).
+A stand-alone version of our novel 2D self-attention mechanism is available at [this repo](https://github.com/gdewael/2Dslidingwindow-attention-pytorch).
 
 
 <details><summary>Table of contents</summary>
@@ -72,11 +72,12 @@ If your machine does not have a GPU, we provide Google Colab transfer learning a
 To quickly test out CpG Transformer, we provide Google Drive access to the preprocessed files for the Ser dataset, which can be downloaded [here](https://drive.google.com/drive/folders/1zNvyOX0F0ztDFEsgwaeTdsxJYo0_fQgg).
 
 ```bash
+# Train a CpG Transformer model
 python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 # train from scratch with one gpu
 python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 2 --accelerator ddp # train with multiple gpus
 python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 --transfer_checkpoint data/model_checkpoints/Ser_model.pt # transfer learning
 
-
+# Impute a dataset with a trained model
 python impute_genome.py cpg_transformer X_ser.npz y_ser.npz pos_ser.npz --model_checkpoint path/to/saved/model.ckpt
 ```
 
