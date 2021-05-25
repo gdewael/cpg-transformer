@@ -1,8 +1,8 @@
 # CpG Transformer
 
-This repository contains code, pre-trained models and instructions on how to use CpG Transformer TODO link
+This repository contains code, pre-trained models and instructions on how to use CpG Transformer **paper coming soon** <!-- TODO -->
 for imputation of single-cell methylomes.
-A stand-alone version of our novel 2D self-attention mechanism is available at ... TODO link
+A stand-alone version of our novel 2D self-attention mechanism is available at [2Dslidingwindow-attention-pytorch](https://github.com/gdewael/2Dslidingwindow-attention-pytorch).
 
 
 <details><summary>Table of contents</summary>
@@ -80,12 +80,14 @@ python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 --trans
 python impute_genome.py cpg_transformer X_ser.npz y_ser.npz pos_ser.npz --model_checkpoint path/to/saved/model.ckpt
 ```
 
-We additionally provide Google Colab notebooks for those with no local GPU resources: Training [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/gdewael/cpg-transformer/blob/main/notebooks/train_cpg_transformer.ipynb)
+We additionally provide Google Colab notebooks for those with no local GPU resources:
+- Training: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/gdewael/cpg-transformer/blob/main/notebooks/train_cpg_transformer.ipynb)
+- Imputation: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/gdewael/cpg-transformer/blob/main/notebooks/impute_cpg_transformer.ipynb)
 
 
 ### Input formatting  <a name="input"></a>
 
-Since there is no consensus on default formatting of single-cell methylation profiling files, some python programming will be necessary to arrange data files in the right format. In this repo, we opt to use NumPy `.npz` zipped archive files as inputs. More specifically, CpG Transformer uses 3 input files:
+CpG Transformer uses NumPy `.npz` zipped archive files as inputs. More specifically, 3 input files are necessary:
 
 **(1)** `X.npz`. An encoded genome as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 1D NumPy array of encoded sequence (e.g.: `np.array([0,2,2,3,...,1,1,2])`). Sequences are encoded according to:
 ```
@@ -95,9 +97,9 @@ Since there is no consensus on default formatting of single-cell methylation pro
 'B': 14, 'X': 15}
 ```
 
-**(2)** `y.npz`. A partially observed methylation matrix as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 2D NumPy array corresponding to the methylation matrix for that chromosome. Every methylation matrix is a `# sites * # cells` matrix with every element at row `i` and column `j` denoting the methylation state of CpG site `i` of cell `j`. Methylation states are encoded by `-1 = unknown`, `0 = unmethylated`, `1 = methylated`. For training, we recommend only including CpG sites where at least one cell has an observed state, as columns without observation confer no useful information when training.
+**(2)** `y.npz`. A partially observed methylation matrix as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 2D NumPy array corresponding to the methylation matrix for that chromosome. Every methylation matrix is a `# sites * # cells` matrix with every element at row `i` and column `j` denoting the methylation state of CpG site `i` of cell `j`. Methylation states are encoded by `-1 = unknown`, `0 = unmethylated`, `1 = methylated`. For training, we recommend only including CpG sites where at least one cell has an observed state, as columns without observation confer no useful information when training. Note that CpG Transformer only accepts forwards strand methylation states. If your methylation calls are recorded for both strands separately, you should combine them to the forward strand.
 
-**(3)** `pos.npz`. Positions of all input CpG sites as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 1D NumPy array corresponding to the locations of all profiled CpG sites in that chromosome (columns in the second input).
+**(3)** `pos.npz`. Positions (0-indexed) of all input CpG sites as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 1D NumPy array corresponding to the locations of all profiled CpG sites in that chromosome (columns in the second input).
 
 Example:
 
@@ -125,9 +127,8 @@ array([  3000573,   3000725,   3000900, ..., 197194914, 197194986,
        197195054], dtype=int32)
 ```
 
-For the datasets used in our paper, we provide template preprocessing scripts in the `data` folder, along with instructions on where to download all relevant data. If your data files follow the exact same format as in one of the used datasets, you will be able to use the pre-made scripts without having to program yourself.
+For the datasets used in our paper, we provide template preprocessing scripts in the `data` folder, along with [instructions](https://github.com/gdewael/cpg-transformer/tree/main/data#readme) on where to download all relevant data. In addition, we provide a simple script for .tsv file inputs. (see the [README](https://github.com/gdewael/cpg-transformer/tree/main/data#readme)).
 
-<!-- TODO simple script for simple tsv file inputs. also for converting np arrays to tsv files.-->
 
 ### Training <a name="train"></a>
 

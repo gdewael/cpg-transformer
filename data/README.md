@@ -40,6 +40,23 @@ array([  3000573,   3000725,   3000900, ..., 197194914, 197194986,
        197195054], dtype=int32)
 ```
 
+# From .tsv files
+
+We provide a simple script `EncodeFromTsv.py` that will convert a .tsv file with columns: `1: chromosome, 2: position on chromosome, 3-...: methylation calls for cells (-1/0/-1)`.
+
+Example:
+```
+chr1    300356  1       -1      0       -1
+chr1    300894  1       0       -1      -1
+chr1    301856  -1      -1      0       0
+...
+chrY    185123  -1      0       -1      0
+chrY    185627  0       -1      -1      -1
+chrY    185823  -1      -1      0       -1
+```
+
+
+# Benchmark datasets instructions
 
 ## Ser dataset
 
