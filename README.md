@@ -80,7 +80,7 @@ python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 --trans
 python impute_genome.py cpg_transformer X_ser.npz y_ser.npz pos_ser.npz --model_checkpoint path/to/saved/model.ckpt
 ```
 
-** Google colab notebooks coming soon ** <!-- TODO -->
+We additionally provide Google Colab notebooks for those with no local GPU resources: Training [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/gdewael/cpg-transformer/blob/main/notebooks/train_cpg_transformer.ipynb)
 
 
 ### Input formatting  <a name="input"></a>
