@@ -493,7 +493,7 @@ Because CpG Transformer masks and randomizes multiple CpG sites per batch, perfo
 
 ### Interpretation <a name="interpret"></a>
 
-**Coming Soon** <!-- TODO -->
+See the `./interpretation` folder.
 
 ## Pre-trained models <a name="pretrained"></a>
 
