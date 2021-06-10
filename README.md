@@ -1,6 +1,6 @@
 # CpG Transformer
 
-This repository contains code, pre-trained models and instructions on how to use CpG Transformer **paper coming soon** <!-- TODO -->
+This repository contains code, pre-trained models and instructions on how to use CpG Transformer ([preprint paper link](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v1))
 for imputation of single-cell methylomes.
 A stand-alone version of our novel 2D self-attention mechanism is available at [this repo](https://github.com/gdewael/2Dslidingwindow-attention-pytorch).
 
@@ -501,7 +501,16 @@ Pre-trained CpG Transformer models for all tested [datasets](#perf-comp) are ava
 
 ## Citation <a name="citation"></a>
 
-If you find this repository useful in your research, please consider citing following paper: **coming soon** <!-- TODO -->
+If you find this repository useful in your research, please cite our [paper](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v1).
+```bibtex
+@article{dewaele2021cpg,
+	author = {Gaetan De Waele, and Jim Clauwaert and Gerben Menschaert and Willem Waegeman},
+	title = {CpG Transformer for imputation of single-cell methylomes},
+	year = {2021},
+	doi = {10.1101/2021.06.08.447547},
+	URL = {https://www.biorxiv.org/content/early/2021/06/09/2021.06.08.447547}
+}
+```
 
 ## License <a name="license"></a>
 
