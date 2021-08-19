@@ -254,7 +254,7 @@ class SlidingWindowWithinCellAttention(nn.Module):
         k = k.transpose(1,2).reshape(-1, seqlen, self.nh, self.h)
         v = v.transpose(1,2).reshape(-1, seqlen, self.nh, self.h)
 
-        r = embed_lin(r).view(bsz, windows, seqlen, self.nh, self.h).repeat_interleave(n_reps,0)
+        r = self.embed_lin(r).view(bsz, windows, seqlen, self.nh, self.h).repeat_interleave(n_reps,0)
 
         k = F.pad(k,(0,)*(ndim*2-4)+(self.w,)*2).unfold(1, seqlen, 1)
         v = F.pad(v,(0,)*(ndim*2-4)+(self.w,)*2).unfold(1, seqlen, 1)
@@ -335,12 +335,11 @@ class BetweenCellAttention(nn.Module):
         bsz = shp[0]
         seqlen = shp[1]
         n_reps = shp[2:-1].numel()
-        windows = 2*w+1
 
-        q,k,v = torch.split(self.qkv_lin(x),h*nh,dim=-1)
-        q = q.view(-1, n_reps, nh, h) * (h ** -0.5)
-        k = k.view(-1, n_reps, nh, h)
-        v = v.view(-1, n_reps, nh, h)
+        q,k,v = torch.split(self.qkv_lin(x),self.h*self.nh,dim=-1)
+        q = q.view(-1, n_reps, self.nh, self.h) * (self.h ** -0.5)
+        k = k.view(-1, n_reps, self.nh, self.h)
+        v = v.view(-1, n_reps, self.nh, self.h)
 
         A = torch.einsum('b q n h, b k n h -> b q k n', q, k)
         A = self.softmax(A)
@@ -348,7 +347,7 @@ class BetweenCellAttention(nn.Module):
         
         z = torch.einsum('b q k n, b k n h -> b q n h', A, v)
 
-        z.view(bsz, seqlen, -1)
+        z = z.reshape(bsz, seqlen, n_reps, -1)
 
         z = self.out_lin(z)
         return z

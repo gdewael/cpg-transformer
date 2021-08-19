@@ -208,7 +208,7 @@ gunzip *CpG.txt.gz
 ```
 
 Convert BigWig to Wig.
-```
+```bash
 wget http://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64.v385/bigWigToWig
 
 for file in $(ls *.bw)

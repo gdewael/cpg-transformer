@@ -10,7 +10,7 @@ from cpg_transformer.blocks import CnnL2h128, CnnL3h128, RnnL1, JointL2h512
 class CpGTransformer(pl.LightningModule):
     def __init__(self, n_cells, RF=1001, n_conv_layers=2, CNN_do=.0, DNA_embed_size=32,
                  cell_embed_size=32, CpG_embed_size=32, transf_hsz=64, transf_do=.20,
-                 act='relu', n_transformers=4, n_heads=8, head_dim=8, window=21, mode='2D'
+                 act='relu', n_transformers=4, n_heads=8, head_dim=8, window=21, mode='2D',
                  layernorm=True, lr=5e-4, lr_decay_factor=.90, warmup_steps=1000):
         super().__init__()
         assert (n_conv_layers == 2) or (n_conv_layers == 3), 'Number of conv layers should be 2 or 3.'
