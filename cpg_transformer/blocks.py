@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+    
+class ReturnSelf(nn.Module):
+    def __init__(self):
+        super().__init__()
+    def forward(self, x):
+        return x
 
 class CnnL2h128(nn.Module):
     def __init__(self, dropout=0, RF=1001):
@@ -186,6 +192,171 @@ class MultiDimWindowAttention(nn.Module):
     def _init_bias(self, bias):
         bound = 1/bias.size(1)**0.5
         return nn.init.uniform_(bias, -bound, bound)
+    
+    
+#############       
+class SlidingWindowWithinCellAttention(nn.Module):
+    """
+    SlidingWindowWithinCellAttention Module.
+    Will work on any input x : [B, L, C, H]
+    where B=batch size, L=sequence length, C=number of cells, H=hidden size.
+    Attention will be computed with a sliding window (convolution-like) over L.
+    Full self-attention over cells C.
+
+    Parameters:
+        - in_features = number of input hidden dimensions (int)
+        - head_dim = hidden dimensionality of each SA head (int)
+        - n_head = number of SA heads (int)
+        - out_features = number of output hidden dimensions (int)
+        - window = window size of sliding window, should be odd. (int) (default=21)
+        - dropout = dropout rate on the self-attention matrix (float) (default=0.20)
+    """
+    def __init__(self, in_features, head_dim, n_head, out_features, window=21, dropout=0.20):
+
+        super().__init__()
+        assert window % 2 == 1, 'Window size should be an odd integer.'
+        
+        self.qkv_lin = nn.Linear(in_features, head_dim*n_head*3)
+        self.embed_lin = nn.Linear(in_features, head_dim*n_head)
+        self.out_lin = nn.Linear(head_dim*n_head, out_features)
+        
+        self.bias_r_w = self._init_bias(nn.Parameter(torch.Tensor(n_head, head_dim)))
+        self.bias_r_r = self._init_bias(nn.Parameter(torch.Tensor(n_head, head_dim)))
+        
+        self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(dim=-1)
+        self.w = int((window-1)/2)
+        
+        self.h = head_dim
+        self.nh = n_head
+        
+    def forward(self, x, r):
+        """
+        Inputs:
+            - x = Input Multi-dimensional sequence. Dimensions [B, L, C, H1].
+            - r = relative positional embeddings for all windows. Dimensions [B, W, L, H1].
+        Output:
+            - z = Output Multi-dimensional sequence. Dimensions [B, L, *, H2].
+        
+        (Lettercode: B = batch size, W = window size, L = input sequence length,
+                     H1 = input hidden size, H2 = output hidden size,
+                     * = any or none additional dimensions.)
+        """
+        shp = x.shape
+        ndim = len(shp)
+        bsz = shp[0]
+        seqlen = shp[1]
+        n_reps = shp[2:-1].numel()
+        windows = 2*self.w+1
+
+        q,k,v = torch.split(self.qkv_lin(x),self.h*self.nh,dim=-1)
+        q = q.transpose(1,2).reshape(-1, seqlen, self.nh, self.h) * (self.h ** -0.5)
+        k = k.transpose(1,2).reshape(-1, seqlen, self.nh, self.h)
+        v = v.transpose(1,2).reshape(-1, seqlen, self.nh, self.h)
+
+        r = embed_lin(r).view(bsz, windows, seqlen, self.nh, self.h).repeat_interleave(n_reps,0)
+
+        k = F.pad(k,(0,)*(ndim*2-4)+(self.w,)*2).unfold(1, seqlen, 1)
+        v = F.pad(v,(0,)*(ndim*2-4)+(self.w,)*2).unfold(1, seqlen, 1)
+
+        q_k = q + self.bias_r_w
+        q_r = q + self.bias_r_r
+
+        AC = torch.einsum('bs...nh,bwnhs->bsn...w',q_k,k)
+        BD = torch.einsum('bs...nh,bwsnh->bsn...w',q_r,r)
+        A = AC+BD
+
+        mask = torch.zeros(shp[1:-2], device=k.device).bool()
+        mask = F.pad(mask,(0,)*(ndim*2-8)+(self.w,)*2,value=True).unfold(0,seqlen,1).T
+        for _ in range(ndim-3):
+            mask = mask.unsqueeze(1)
+
+        mask_value = -torch.finfo(A.dtype).max
+        A.masked_fill_(mask, mask_value)
+
+        A = self.softmax(A)
+        A = self.dropout(A)
+
+        z = torch.einsum('bsn...w,bwnhs->bs...nh',A,v)
+        z = z.view(bsz, n_reps, seqlen, -1).transpose(1,2)
+        z = self.out_lin(z)
+        return z
+    
+    def _init_bias(self, bias):
+        bound = 1/bias.size(1)**0.5
+        return nn.init.uniform_(bias, -bound, bound)
+
+    
+class BetweenCellAttention(nn.Module):
+    """
+    BetweenCellAttention Module.
+    Will work on any input x : [B, L, C, H]
+    where B=batch size, L=sequence length, C=number of cells, H=hidden size.
+    Attention will be computed with a sliding window (convolution-like) over L.
+    Full self-attention over cells C.
+
+    Parameters:
+        - in_features = number of input hidden dimensions (int)
+        - head_dim = hidden dimensionality of each SA head (int)
+        - n_head = number of SA heads (int)
+        - out_features = number of output hidden dimensions (int)
+        - window = window size of sliding window, should be odd. (int) (default=21) UNUSED.
+        - dropout = dropout rate on the self-attention matrix (float) (default=0.20)
+    """
+    def __init__(self, in_features, head_dim, n_head, out_features, window=21, dropout=0.20):
+
+        super().__init__()
+        assert window % 2 == 1, 'Window size should be an odd integer.'
+        
+        self.qkv_lin = nn.Linear(in_features, head_dim*n_head*3)
+        self.out_lin = nn.Linear(head_dim*n_head, out_features)
+        
+        self.dropout = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(dim = -2)
+        self.w = int((window-1)/2)
+        
+        self.h = head_dim
+        self.nh = n_head
+        
+    def forward(self, x, r):
+        """
+        Inputs:
+            - x = Input Multi-dimensional sequence. Dimensions [B, L, C, H1].
+            - r = relative positional embeddings for all windows. Dimensions [B, W, L, H1].
+        Output:
+            - z = Output Multi-dimensional sequence. Dimensions [B, L, *, H2].
+        
+        (Lettercode: B = batch size, W = window size, L = input sequence length,
+                     H1 = input hidden size, H2 = output hidden size,
+                     * = any or none additional dimensions.)
+        """
+        shp = x.shape
+        ndim = len(shp)
+        bsz = shp[0]
+        seqlen = shp[1]
+        n_reps = shp[2:-1].numel()
+        windows = 2*w+1
+
+        q,k,v = torch.split(self.qkv_lin(x),h*nh,dim=-1)
+        q = q.view(-1, n_reps, nh, h) * (h ** -0.5)
+        k = k.view(-1, n_reps, nh, h)
+        v = v.view(-1, n_reps, nh, h)
+
+        A = torch.einsum('b q n h, b k n h -> b q k n', q, k)
+        A = self.softmax(A)
+        A = self.dropout(A)
+        
+        z = torch.einsum('b q k n, b k n h -> b q n h', A, v)
+
+        z.view(bsz, seqlen, -1)
+
+        z = self.out_lin(z)
+        return z
+    
+    def _init_bias(self, bias):
+        bound = 1/bias.size(1)**0.5
+        return nn.init.uniform_(bias, -bound, bound)
+###############
 
 class MultiDimWindowTransformerLayer(nn.Module):
     """
@@ -204,9 +375,10 @@ class MultiDimWindowTransformerLayer(nn.Module):
         - dropout = dropout rate on the self-attention matrix (float) (default=0.20)
         - activation = activation used in feed-forward, either 'relu' or 'gelu' (str) (default='relu')
         - layernorm = whether to apply layernorm after attn+res and ff+res (bool) (default=True)
+        - mode = should be either 2D, axial, intercell, intracell, none
     """
     def __init__(self, hidden_dim, head_dim, n_head, ff_dim, window=21, dropout=0.20,
-                 activation='relu', layernorm=True):
+                 activation='relu', layernorm=True, mode='2D'):
         super().__init__()
         if activation.lower()=='relu':
             act = nn.ReLU()
@@ -214,14 +386,37 @@ class MultiDimWindowTransformerLayer(nn.Module):
             act = nn.GELU()
             
         if layernorm:
-            self.norm1 = nn.LayerNorm(hidden_dim)
+            norm1 = nn.LayerNorm(hidden_dim)
             self.norm2 = nn.LayerNorm(hidden_dim)
         else:
-            self.norm1 = lambda x : x
-            self.norm2 = lambda x : x
+            norm1 = ReturnSelf()
+            self.norm2 = ReturnSelf()
+            
+        if mode == '2D':
+            self.attn_list = nn.ModuleList([MultiDimWindowAttention(hidden_dim, head_dim, n_head, hidden_dim,
+                                                window=window, dropout=dropout)])
+            self.norm_attn_list = nn.ModuleList([norm1])
+        elif mode == 'axial':
+            norm_extra = nn.LayerNorm(hidden_dim) if layernorm else ReturnSelf()
+            attn1 = SlidingWindowWithinCellAttention(hidden_dim, head_dim, n_head, hidden_dim,
+                                                          window=window, dropout=dropout)
+            attn2 = BetweenCellAttention(hidden_dim, head_dim, n_head, hidden_dim,
+                                              window=window, dropout=dropout)
+            self.attn_list = nn.ModuleList([attn1, attn2])
+            self.norm_attn_list = nn.ModuleList([norm1, norm_extra])
+        elif mode == 'intercell':
+            self.attn_list = nn.ModuleList([BetweenCellAttention(hidden_dim, head_dim, n_head, hidden_dim,
+                                             window=window, dropout=dropout)])
+            self.norm_attn_list = nn.ModuleList([norm1])
+        elif mode == 'intracell':
+            self.attn_list = nn.ModuleList([SlidingWindowWithinCellAttention(hidden_dim, head_dim, n_head, hidden_dim,
+                                                         window=window, dropout=dropout)])
+            self.norm_attn_list = nn.ModuleList([norm1])
+        elif mode == 'none':
+            self.attn_list = nn.ModuleList([])
+            self.norm_attn_list = nn.ModuleList([])
         
-        self.attn = MultiDimWindowAttention(hidden_dim, head_dim, n_head, hidden_dim,
-                                    window=window, dropout=dropout)
+        
         self.pos_emb = RelPositionalWindowEmbedding(hidden_dim, window=window)
         
         self.ff = nn.Sequential(nn.Linear(hidden_dim,ff_dim), act,
@@ -238,6 +433,7 @@ class MultiDimWindowTransformerLayer(nn.Module):
         """
         x, pos = x_pos
         r = self.pos_emb(pos, x)
-        x = self.norm1(self.attn(x, r) + x)
+        for attn, norm in zip(self.attn_list, self.norm_attn_list):
+            x = norm(attn(x, r) + x)
         x = self.norm2(self.ff(x) + x)
         return (x, pos)

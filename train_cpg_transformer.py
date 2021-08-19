@@ -65,6 +65,8 @@ model_parse.add_argument('--n_transformers', type=int, default=4,
                          help='Number of transformer modules to use.')
 model_parse.add_argument('--act', type=str, default='relu',
                          help='Activation function in transformer feed-forward, either relu or gelu.')
+model_parse.add_argument('--mode', type=str, choices=['2D', 'axial', 'intercell', 'intracell', 'none'], default='2D',
+                         help='Attention mode.')
 model_parse.add_argument('--transf_hsz', type=int, default=64,
                          help='Hidden dimension size in the transformer.')
 model_parse.add_argument('--n_heads', type=int, default=8,
@@ -127,7 +129,7 @@ if args.transfer_checkpoint:
                        transf_do=args.transf_do, act=args.act, n_transformers=args.n_transformers,
                        n_heads=args.n_heads, head_dim=args.head_dim, window=args.window,
                        layernorm=args.layernorm, lr=args.lr, lr_decay_factor=args.lr_decay_factor,
-                       warmup_steps=args.warmup_steps)
+                       warmup_steps=args.warmup_steps, mode=args.mode)
         model.load_state_dict(pretrained_model_state)
         model.cell_embed = torch.nn.Embedding(n_cells, model.hparams.cell_embed_size)       
         
@@ -138,7 +140,7 @@ else:
                        transf_do=args.transf_do, act=args.act, n_transformers=args.n_transformers,
                        n_heads=args.n_heads, head_dim=args.head_dim, window=args.window,
                        layernorm=args.layernorm, lr=args.lr, lr_decay_factor=args.lr_decay_factor,
-                       warmup_steps=args.warmup_steps)
+                       warmup_steps=args.warmup_steps, mode=args.mode)
     
     
 
