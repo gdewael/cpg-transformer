@@ -104,8 +104,6 @@ n_cells = y[list(y.keys())[0]].shape[1]
 model = DeepCpG(n_cells, n_conv_layers=args.n_conv_layers, do_CNN=args.do_CNN, RF=args.RF,
                  do_RNN=args.do_RNN, do_joint1=args.do_joint1, do_joint2=args.do_joint2,
                  lr=args.lr, warmup_steps=args.warmup_steps, lr_decay_factor=args.lr_decay_factor)
-    
-# e2e or not. args.e2e
 
 datamodule = DeepCpGDataModule(X, y, pos, RF=model.RF, fracs=args.fracs,
                  val_keys=args.val_keys, test_keys=args.test_keys,
@@ -115,7 +113,7 @@ datamodule = DeepCpGDataModule(X, y, pos, RF=model.RF, fracs=args.fracs,
 
 callbacks = [ModelCheckpoint(monitor='val_loss', mode='min')]
 if args.tensorboard:
-    logger = TensorBoardLogger('logfolder/', name="experiment_name")
+    logger = TensorBoardLogger(args.logfolder, name=args.experiment_name)
     lr_monitor = LearningRateMonitor(logging_interval='step')
     callbacks += [lr_monitor]
 if args.earlystop:
