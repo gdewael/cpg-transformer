@@ -154,7 +154,7 @@ datamodule = CpGTransformerDataModule(X, y, pos, segment_size=args.segment_size,
 
 callbacks = [ModelCheckpoint(monitor='val_loss', mode='min')]
 if args.tensorboard:
-    logger = TensorBoardLogger(args.logfolder, name=args.experiment_name)
+    logger = TensorBoardLogger(args.log_folder, name=args.experiment_name)
     lr_monitor = LearningRateMonitor(logging_interval='step')
     callbacks += [lr_monitor]
 if args.earlystop:
