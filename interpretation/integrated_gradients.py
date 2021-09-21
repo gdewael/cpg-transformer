@@ -42,12 +42,14 @@ parser.add_argument('--plot_name_prefix', type=str, default='interpret_model_',
                     help='If making plots, which prefix for the filenames.')
 parser.add_argument('--plot_name_suffix', type=str, default='.pdf',
                     help='If making plots, which suffix for the filename (file extension)')
-
+parser.add_argument('--plot_window', type=int, default=None,
+                    help='The size of the window to plot.')
 parser.add_argument('--which', type=str, choices=['main', 'embeds', 'both'], default='both',
                     help='What to interpret. If `main`, will interpret all embeddings combined as input to the transformer layers. If `embeds`, will interpret (and plot) each embedding separately. `both` naturally does both')
 
-parser.add_argument('--figsize', type=int, nargs='+', default=[10,3],
+parser.add_argument('--figsize', type=float, nargs='+', default=[10.,3.],
                     help='2 integers specifying the figure size.')
+
 
 
 args = parser.parse_args()
@@ -108,8 +110,8 @@ def plotter(to_plot, annot, y_true, index_label, pred, title, vlim, figsize):
     _ = ax.set_yticklabels(tl, rotation=0)
     ax.set_xlabel('CpG site relative from prediction site')
     ax.set_ylabel('Cell index')
-    ax.set_xticks(np.arange(0,81,10)+0.5)
-    _ = ax.set_xticklabels(np.arange(-40,41,10))
+    ax.set_xticks(np.arange(0,to_plot.shape[1],10)+0.5)
+    _ = ax.set_xticklabels(np.arange(-int((to_plot.shape[1]-1)/2),int((to_plot.shape[1]-1)/2)+1,10))
     plt.tight_layout()
     
     
@@ -121,7 +123,7 @@ CpG_embed_weight = model.CpG_embed.weight.data
 CNN_embed_weight = model.CNN[0].embed.weight.data
 
 
-out_dict = {'preds': [], 'ref': []}
+out_dict = {'errors': [], 'ref': []}
 if args.which == 'main':
     out_dict['total'] = []
 if args.which == 'embeds':
@@ -195,8 +197,8 @@ for i in range(config.shape[0]):
     out = [o.detach().cpu() for o in out]
 
     
-    out_dict['ref'].append(pred[0].cpu().item())
-    out_dict['preds'].append(y_true[0].cpu().item())
+    out_dict['errors'].append(pred[0].cpu().item())
+    out_dict['ref'].append(y_true[0].cpu().item())
     if args.which == 'both':
         out_dict['total'].append(torch.sum(out[-1][0]+out[0][0]+out[1][0],-1).cpu())
         out_dict['dna'].append(torch.sum(out[0][0],-1).cpu())
@@ -212,32 +214,61 @@ for i in range(config.shape[0]):
     if args.make_plot:
         annot = (y_batch[0].cpu().numpy().T-1).astype(str)
         annot[np.where(annot=="-1")] = '?'
-
+        
+        vlim = np.abs(torch.sum(out[-1][0]+out[0][0]+out[1][0],-1).cpu().numpy().T).max()
+        
+        add_title = "("+key_s+":"+str(pos[key_s][col_index_s]-RF2_TF)+"-"+str(pos[key_s][col_index_s]+RF2_TF)+")"
+        
+        half_ = int((out[-1][0].cpu().numpy().shape[0]-1)/2)
+        if args.plot_window:
+            slice_ = slice(half_-int((args.plot_window-1)/2), half_+int((args.plot_window-1)/2)+1, 1)
+            add_title = "("+key_s+":"+str(pos[key_s][col_index_s]-(half_-int((args.plot_window-1)/2)))+"-"+str(pos[key_s][col_index_s]+int((args.plot_window-1)/2))+")"
+        
+        
         if args.which != 'embeds':
             to_plot = torch.sum(out[-1][0]+out[0][0]+out[1][0],-1).cpu().numpy().T
-            vlim = np.abs(to_plot).max()
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'Total Contributions', vlim, args.figsize)
+            if args.plot_window:
+                to_plot = to_plot[:, slice_]
+                
+                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
+                annot[np.where(annot=="-1")] = '?'
+                annot = annot[:, slice_]
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'Total Contributions ' + add_title, vlim, args.figsize)
             plt.savefig(args.plot_name_prefix+'total_'+f"{i:03d}"+args.plot_name_suffix)
 
         if args.which != 'main':
             to_plot = torch.sum(out[1][0],dim=-1).cpu().numpy().T
-            vlim = np.abs(to_plot).max()
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'CpG Embedding Contributions', vlim, args.figsize)
+            if args.plot_window:
+                to_plot = to_plot[:, slice_]
+                
+                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
+                annot[np.where(annot=="-1")] = '?'
+                annot = annot[:, slice_]
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'CpG Embedding Contributions ' + add_title, vlim, args.figsize)
             plt.savefig(args.plot_name_prefix+'cpg_'+f"{i:03d}"+args.plot_name_suffix)
 
             to_plot = torch.sum(out[-1][0],dim=-1).cpu().numpy().T
-            vlim = np.abs(to_plot).max()
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'Cell Embedding Contributions', vlim, args.figsize)
+            if args.plot_window:
+                to_plot = to_plot[:, slice_]
+                
+                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
+                annot[np.where(annot=="-1")] = '?'
+                annot = annot[:, slice_]
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'Cell Embedding Contributions ' + add_title, vlim, args.figsize)
             plt.savefig(args.plot_name_prefix+'cell_'+f"{i:03d}"+args.plot_name_suffix)
 
             to_plot = torch.sum(out[0][0],dim=-1).cpu().numpy().T
-            vlim = np.abs(to_plot).max()
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'DNA Embedding Contributions', vlim, args.figsize)
+            if args.plot_window:
+                to_plot = to_plot[:, slice_]
+                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
+                annot[np.where(annot=="-1")] = '?'
+                annot = annot[:, slice_]
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'DNA Embedding Contributions ' + add_title, vlim, args.figsize)
             plt.savefig(args.plot_name_prefix+'dna_'+f"{i:03d}"+args.plot_name_suffix)
 
         plt.close('all')
     
-out_dict['preds'] = np.array(out_dict['preds'])
+out_dict['errors'] = np.array(out_dict['preds'])
 out_dict['ref'] = np.array(out_dict['ref'])
 if args.which == 'both':
     out_dict['total'] = np.array([p.numpy() for p in out_dict['total']])

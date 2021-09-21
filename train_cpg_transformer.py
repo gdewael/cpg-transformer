@@ -65,7 +65,7 @@ model_parse.add_argument('--n_transformers', type=int, default=4,
                          help='Number of transformer modules to use.')
 model_parse.add_argument('--act', type=str, default='relu',
                          help='Activation function in transformer feed-forward, either relu or gelu.')
-model_parse.add_argument('--mode', type=str, choices=['2D', 'axial', 'intercell', 'intracell', 'none'], default='2D',
+model_parse.add_argument('--mode', type=str, choices=['2D', 'axial', 'intercell', 'intracell', 'none'], default='axial',
                          help='Attention mode.')
 model_parse.add_argument('--transf_hsz', type=int, default=64,
                          help='Hidden dimension size in the transformer.')
@@ -74,7 +74,7 @@ model_parse.add_argument('--n_heads', type=int, default=8,
 model_parse.add_argument('--head_dim', type=int, default=8,
                          help='Hidden dimensionality of each head.')
 model_parse.add_argument('--window', type=int, default=21,
-                         help='Window size of 2D sliding window attention, should be odd.')
+                         help='Window size of row-wise sliding window attention, should be odd.')
 model_parse.add_argument('--layernorm', type=boolean, default=True,
                          help='Whether to apply layernorm in transformer modules.')
 model_parse.add_argument('--CNN_do', type=float, default=.0,

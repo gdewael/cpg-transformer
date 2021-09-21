@@ -1,1 +1,1 @@
-Thanks to https://unix.stackexchange.com/questions/253499/extracting-subset-from-fasta-file
+Source: https://unix.stackexchange.com/questions/253499/extracting-subset-from-fasta-file

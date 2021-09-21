@@ -69,7 +69,7 @@ model_parse.add_argument('--RNN_epochs', type=int, default=50,
                         help='If not using e2e training, how much epochs to train the RNN for. Overrides the max_epochs Trainer argument.')
 model_parse.add_argument('--joint_epochs', type=int, default=25,
                         help='If not using e2e training, how much epochs to train the joint for. Overrides the max_epochs Trainer argument.')
-model.parse.add_argument('--lr_factor_joint', type=float, default=0.05,
+model_parse.add_argument('--lr_factor_joint', type=float, default=0.05,
                          help='Factor with which to multiply the learning rate when training the joint module. Empirically, we found that a high learning rate for optimizing the joint module only leads to overfitting.')
 
 

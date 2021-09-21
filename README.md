@@ -1,9 +1,7 @@
 # CpG Transformer
 
-This repository contains code, pre-trained models and instructions on how to use CpG Transformer ([preprint paper link](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v1))
+This repository contains code, pre-trained models and instructions on how to use CpG Transformer ([preprint paper link](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v2))
 for imputation of single-cell methylomes.
-A stand-alone version of our novel 2D self-attention mechanism is available at [this repo](https://github.com/gdewael/2Dslidingwindow-attention-pytorch).
-
 
 <details><summary>Table of contents</summary>
   
@@ -26,11 +24,11 @@ A stand-alone version of our novel 2D self-attention mechanism is available at [
 
 | Dataset | # cells | ROC AUC [DeepCpG](https://doi.org/10.1186/s13059-017-1189-z) \* | ROC AUC [CaMelia](https://doi.org/10.1093/bioinformatics/btab029) \* | ROC AUC CpG Transformer |
 | - | - | - | - | - | 
-| [Ser](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE56879) | 20 | 90.21 | 90.22 | **91.49** | 
-| [2i](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE56879) | 12 | 84.80 | 83.02 | **85.57** | 
-| [HCC](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE65364) | 25 | 96.89 | 97.42 | **97.94** | 
-| [MBL](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125499) | 30 | 88.22 | 89.17 | **92.05** |
-| [Hemato](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE87197) | 122 | 88.85 | 89.16 | **90.37** |
+| [Ser](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE56879) | 20 | 90.21 | 90.22 | **91.55** | 
+| [2i](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE56879) | 12 | 84.80 | 83.02 | **85.77** | 
+| [HCC](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE65364) | 25 | 96.89 | 97.42 | **97.96** | 
+| [MBL](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125499) | 30 | 88.22 | 89.17 | **92.49** |
+| [Hemato](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE87197) | 122 | 88.85 | 89.16 | **90.65** |
 
 
 \* Results obtained with reproduced, optimized code, also found in this repository.
@@ -42,19 +40,18 @@ CpG Transformer is implemented in [PyTorch Lightning](https://github.com/PyTorch
 
 If you have one or more GPUs on your machine, we recommend running CpG Transformer locally using a conda environment.
 Make sure to install the correct version of PyTorch (using the cuda version that is installed on your system).
-The following shows an example installation process for a system running CUDA 10.1:
+The following shows an example installation process for a system running CUDA 11.1:
 
 ```bash
 conda create --name cpgtransformer
 source activate cpgtransformer
 conda install pip
-which pip
-pip install torch==1.8.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
+pip install torch==1.9.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
 pip install pytorch-lightning==1.3.0 biopython pandas numpy
 git clone https://github.com/gdewael/cpg-transformer.git
 ```
 
-In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested with up to Python 3.9.4, PyTorch 1.8.1, PyTorch Lightning 1.3.0.
+In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested with up to Python 3.9, PyTorch 1.9.0, PyTorch Lightning 1.3.0.
 
 For CaMelia training and imputation, additionally do:
 ```bash
@@ -141,52 +138,44 @@ Arguments to CpG Transformer are split into 4 groups: (1) DataModule arguments c
 <details><summary>All train_cpg_transformer.py flags</summary>
 
 ```
-python train_cpg_transformer.py -h
-usage: train_cpg_transformer.py [-h] [--segment_size int] [--fracs float [float ...]]
-                                [--mask_p float] [--mask_random_p float] [--resample_cells int]
-                                [--resample_cells_val int] [--val_keys str [str ...]]
-                                [--test_keys str [str ...]] [--batch_size int] [--n_workers int]
-                                [--transfer_checkpoint str] [--RF int] [--n_conv_layers int]
-                                [--DNA_embed_size int] [--cell_embed_size int]
+usage: train_cpg_transformer.py [-h] [--segment_size int] [--fracs float [float ...]] [--mask_p float]
+                                [--mask_random_p float] [--resample_cells int] [--resample_cells_val int]
+                                [--val_keys str [str ...]] [--test_keys str [str ...]] [--batch_size int]
+                                [--n_workers int] [--transfer_checkpoint str] [--RF int]
+                                [--n_conv_layers int] [--DNA_embed_size int] [--cell_embed_size int]
                                 [--CpG_embed_size int] [--n_transformers int] [--act str]
-                                [--transf_hsz int] [--n_heads int] [--head_dim int]
-                                [--window int] [--layernorm boolean] [--CNN_do float]
-                                [--transf_do float] [--lr float] [--lr_decay_factor float]
+                                [--mode {2D,axial,intercell,intracell,none}] [--transf_hsz int]
+                                [--n_heads int] [--head_dim int] [--window int] [--layernorm boolean]
+                                [--CNN_do float] [--transf_do float] [--lr float] [--lr_decay_factor float]
                                 [--warmup_steps int] [--tensorboard boolean] [--log_folder str]
                                 [--experiment_name str] [--earlystop boolean] [--patience int]
                                 [--logger [str_to_bool]] [--checkpoint_callback [str_to_bool]]
                                 [--default_root_dir str] [--gradient_clip_val float]
-                                [--gradient_clip_algorithm str] [--process_position int]
-                                [--num_nodes int] [--num_processes int]
-                                [--gpus _gpus_allowed_type] [--auto_select_gpus [str_to_bool]]
-                                [--tpu_cores _gpus_allowed_type] [--log_gpu_memory str]
-                                [--progress_bar_refresh_rate int]
+                                [--gradient_clip_algorithm str] [--process_position int] [--num_nodes int]
+                                [--num_processes int] [--gpus _gpus_allowed_type]
+                                [--auto_select_gpus [str_to_bool]] [--tpu_cores _gpus_allowed_type]
+                                [--log_gpu_memory str] [--progress_bar_refresh_rate int]
                                 [--overfit_batches _int_or_float_type] [--track_grad_norm float]
-                                [--check_val_every_n_epoch int]
-                                [--fast_dev_run [str_to_bool_or_int]]
-                                [--accumulate_grad_batches int] [--max_epochs int]
-                                [--min_epochs int] [--max_steps int] [--min_steps int]
-                                [--max_time str] [--limit_train_batches _int_or_float_type]
+                                [--check_val_every_n_epoch int] [--fast_dev_run [str_to_bool_or_int]]
+                                [--accumulate_grad_batches int] [--max_epochs int] [--min_epochs int]
+                                [--max_steps int] [--min_steps int] [--max_time str]
+                                [--limit_train_batches _int_or_float_type]
                                 [--limit_val_batches _int_or_float_type]
                                 [--limit_test_batches _int_or_float_type]
                                 [--limit_predict_batches _int_or_float_type]
-                                [--val_check_interval _int_or_float_type]
-                                [--flush_logs_every_n_steps int] [--log_every_n_steps int]
-                                [--accelerator str] [--sync_batchnorm [str_to_bool]]
-                                [--precision int] [--weights_summary str]
+                                [--val_check_interval _int_or_float_type] [--flush_logs_every_n_steps int]
+                                [--log_every_n_steps int] [--accelerator str]
+                                [--sync_batchnorm [str_to_bool]] [--precision int] [--weights_summary str]
                                 [--weights_save_path str] [--num_sanity_val_steps int]
-                                [--truncated_bptt_steps int] [--resume_from_checkpoint str]
-                                [--profiler str] [--benchmark [str_to_bool]]
-                                [--deterministic [str_to_bool]]
+                                [--truncated_bptt_steps int] [--resume_from_checkpoint str] [--profiler str]
+                                [--benchmark [str_to_bool]] [--deterministic [str_to_bool]]
                                 [--reload_dataloaders_every_epoch [str_to_bool]]
-                                [--auto_lr_find [str_to_bool_or_str]]
-                                [--replace_sampler_ddp [str_to_bool]]
+                                [--auto_lr_find [str_to_bool_or_str]] [--replace_sampler_ddp [str_to_bool]]
                                 [--terminate_on_nan [str_to_bool]]
                                 [--auto_scale_batch_size [str_to_bool_or_str]]
-                                [--prepare_data_per_node [str_to_bool]] [--plugins str]
-                                [--amp_backend str] [--amp_level str] [--distributed_backend str]
-                                [--move_metrics_to_cpu [str_to_bool]]
-                                [--multiple_trainloader_mode str]
+                                [--prepare_data_per_node [str_to_bool]] [--plugins str] [--amp_backend str]
+                                [--amp_level str] [--distributed_backend str]
+                                [--move_metrics_to_cpu [str_to_bool]] [--multiple_trainloader_mode str]
                                 [--stochastic_weight_avg [str_to_bool]]
                                 X y pos
 
@@ -258,10 +247,12 @@ Model:
   --n_transformers int  Number of transformer modules to use. (default: 4)
   --act str             Activation function in transformer feed-forward, either relu or gelu.
                         (default: relu)
+  --mode {2D,axial,intercell,intracell,none}
+                        Attention mode. (default: axial)
   --transf_hsz int      Hidden dimension size in the transformer. (default: 64)
   --n_heads int         Number of self-attention heads. (default: 8)
   --head_dim int        Hidden dimensionality of each head. (default: 8)
-  --window int          Window size of 2D sliding window attention, should be odd. (default: 21)
+  --window int          Window size of row-wise sliding window attention, should be odd. (default: 21)
   --layernorm boolean   Whether to apply layernorm in transformer modules. (default: True)
   --CNN_do float        Dropout rate in the CNN to embed DNA context. (default: 0.0)
   --transf_do float     Dropout rate on the self-attention matrix. (default: 0.2)
@@ -501,14 +492,14 @@ Pre-trained CpG Transformer models for all tested [datasets](#perf-comp) are ava
 
 ## Citation <a name="citation"></a>
 
-If you find this repository useful in your research, please cite our [paper](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v1).
+If you find this repository useful in your research, please cite our [paper](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v2).
 ```bibtex
-@article{dewaele2021cpg,
+@article {dewaele2021cpg,
 	author = {Gaetan De Waele and Jim Clauwaert and Gerben Menschaert and Willem Waegeman},
 	title = {CpG Transformer for imputation of single-cell methylomes},
 	year = {2021},
 	doi = {10.1101/2021.06.08.447547},
-	URL = {https://www.biorxiv.org/content/early/2021/06/09/2021.06.08.447547}
+	URL = {https://www.biorxiv.org/content/early/2021/09/17/2021.06.08.447547}
 }
 ```
 
