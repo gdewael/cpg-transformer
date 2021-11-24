@@ -100,7 +100,6 @@ if args.model == 'cpg_transformer':
     print('Preprocessing data ...')
     dm.setup(None)
 
-
     y_outputs = dict()
     for key, loader in dm.datasets_per_chr.items():
         print('Imputing', key, '...')
@@ -109,11 +108,16 @@ if args.model == 'cpg_transformer':
         lenloader_key = len(loader)
         for ix, batch in enumerate(loader):
             
-            batch = [b.to(dev, torch.long) for b in batch]
+            batch = [batch[0].to(dev, torch.long), batch[1].to(dev, model.dtype),
+                     batch[2].to(dev, torch.long), batch[3].to(dev, torch.long)]
             with torch.no_grad():
                 output = model(*batch)
-
-            output = torch.sigmoid(output[0]).to('cpu').numpy()
+            
+            if model.hparams.data_mode == 'binary':
+                output = torch.sigmoid(output[0]).to('cpu').numpy()
+            elif model.hparams.data_mode == 'continuous':
+                output = output[0].to('cpu').numpy()
+                
             if ix == 0:
                 y_outputs_key[:args.segment_size-RF2_TF] = output[:args.segment_size-RF2_TF]
             elif ix+1 == lenloader_key:
@@ -152,7 +156,6 @@ elif args.model == 'deepcpg':
     model = DeepCpG.load_from_checkpoint(args.model_checkpoint_dpcpg)
     model.eval()
     model = model.to(dev)
-
     dm = DeepCpGDataModule(X, y, pos, model.RF, batch_size=args.batch_size_dpcpg,
                            n_workers=args.n_workers_dpcpg, window=args.window_dpcpg,
                            max_dist=args.maxdist_dpcpg, batch_index=True)

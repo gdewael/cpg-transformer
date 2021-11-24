@@ -50,9 +50,8 @@ parser.add_argument('--which', type=str, choices=['main', 'embeds', 'both'], def
 parser.add_argument('--figsize', type=float, nargs='+', default=[10.,3.],
                     help='2 integers specifying the figure size.')
 
-
-
 args = parser.parse_args()
+
 
 print('----- Integrated Gradients interpretation -----')
 
@@ -64,14 +63,15 @@ model = CpGTransformer.load_from_checkpoint(args.model_checkpoint)
 model = model.to('cuda')
 model.eval()
 
+
 RF_TF = (model.hparams.window-1)*model.hparams.n_transformers+1
 RF2_TF = int((RF_TF-1)/2)
 r = torch.arange(-int((model.RF-1)/2),int((model.RF-1)/2)+1)
 
 config = pd.read_csv(args.config_file,header=None)
 
-assert set([0,1]).union(set(np.unique(config[3].values))) == set([0,1]), '4th column of config file should contain only 0s or 1s'
-
+if model.hparams.data_mode == "binary":
+    assert set([0,1]).union(set(np.unique(config[3].values))) == set([0,1]), '4th column of config file should contain only 0s or 1s'
 
 class InterpreterCaptum(nn.Module):
     def __init__(self, model):
@@ -79,10 +79,6 @@ class InterpreterCaptum(nn.Module):
         
         self.model = model
         self.tfw =  int((model.hparams['window']-1)/2)
-        
-        self.cell_embed_weight = self.model.cell_embed.weight.data
-        self.CpG_embed_weight = self.model.CpG_embed.weight.data
-        self.CNN_embed_weight = self.model.CNN[0].embed.weight.data
         
     def forward(self, CNN_embed, CpG_embed, cell_embed, pos, index_label, y_true):
         
@@ -95,17 +91,27 @@ class InterpreterCaptum(nn.Module):
             pos = pos[:,self.tfw:-self.tfw]
         y_predict = self.model.output_head(x).squeeze(1).squeeze(-1)
         y_hat = y_predict[0, index_label]
-        return torch.abs(torch.sigmoid(y_hat)-torch.abs(y_true-1))
+        if self.model.hparams.data_mode == 'binary':
+            return 1 - torch.abs(y_true - torch.sigmoid(y_hat))
+        else:
+            return 1 - torch.abs(y_true - y_hat)
 
     
-def plotter(to_plot, annot, y_true, index_label, pred, title, vlim, figsize):
+def plotter(to_plot, annot, y_true, index_label, pred, title, vlim, figsize, data_mode):
     
     plt.figure(figsize=figsize)
     ax = sns.heatmap(to_plot, annot=annot, fmt = '', cbar_kws={'aspect':10}, annot_kws={'size':8},
                      cmap=sns.diverging_palette(217, 134, s=85,l=50, as_cmap=True),
                      vmin=-vlim,vmax=vlim)
-    ax.set_title('{}\nReference label: {}, predicted for cell: {}, Predicted probability of reference class: {:.4f}'.format(title, y_true[0].cpu().item(), index_label,
-                 pred.item()))
+    if data_mode == 'binary':
+        ax.set_title('{}\nReference label: {}, predicted for cell: {}, Predicted probability of reference class: {:.4f}'.format(
+            title, y_true[0].cpu().item(), index_label,pred.item()
+        ))
+    else:
+        ax.set_title('{}\nReference label: {}, predicted for cell: {}, Mean absolute error of prediction: {:.4f}'.format(
+            title, y_true[0].cpu().item(), index_label, (1-pred).item()
+        ))
+    
     tl = ax.get_yticklabels()
     _ = ax.set_yticklabels(tl, rotation=0)
     ax.set_xlabel('CpG site relative from prediction site')
@@ -117,11 +123,6 @@ def plotter(to_plot, annot, y_true, index_label, pred, title, vlim, figsize):
     
 InterpreterNet = InterpreterCaptum(model)
 ig = IntegratedGradients(InterpreterNet)
-
-cell_embed_weight = model.cell_embed.weight.data
-CpG_embed_weight = model.CpG_embed.weight.data
-CNN_embed_weight = model.CNN[0].embed.weight.data
-
 
 out_dict = {'errors': [], 'ref': []}
 if args.which == 'main':
@@ -143,8 +144,13 @@ for i in range(config.shape[0]):
     key_s = row[0]
     row_index_s = row[1]
     col_index_s = row[2]
-    ref_label_s = None if row[3] == 'None' else int(row[3])
-    label_changes_s = None if row[4] == 'None' else int(row[4])
+    ref_label_s = None if row[3] == 'None' else float(row[3])
+    label_changes_s = None if row[4] == 'None' else float(row[4])
+    if model.hparams.data_mode == 'binary':
+        if type(ref_label_s) == float:
+            ref_label_s = int(ref_label_s)
+        if type(label_changes_s) == float:
+            label_changes_s = int(label_changes_s)
     
     y_batch = torch.from_numpy(y[key_s][max(0,col_index_s-RF2_TF):col_index_s+RF2_TF+1]).to('cuda')
     pos_batch = torch.from_numpy(pos[key_s][max(0,col_index_s-RF2_TF):col_index_s+RF2_TF+1])
@@ -159,27 +165,17 @@ for i in range(config.shape[0]):
     y_batch += 1
     
     with torch.no_grad():
-        y_batch = y_batch.to(torch.long).unsqueeze(0)
+        y_batch = y_batch.to(model.dtype).unsqueeze(0)
         X_batch = X_batch.to(torch.long).unsqueeze(0)
         cell_indices = cell_indices.to(torch.long).unsqueeze(0)
-
+        pos_batch = (pos_batch - pos_batch[:,0].unsqueeze(1)).long()
+        
         bsz, seqlen, n_cells = y_batch.shape[:3]
 
-        pos_batch = (pos_batch - pos_batch[:,0].unsqueeze(1)).to(torch.float)
-
-        cell_embed = F.one_hot(cell_indices, num_classes=cell_embed_weight.shape[0]).to(torch.float)
-        CpG_embed = F.one_hot(y_batch,num_classes=CpG_embed_weight.shape[0]).to(torch.float)
-        CNN_embed = F.one_hot(X_batch, num_classes=CNN_embed_weight.shape[0]).to(torch.float)
-
-        cell_embed = torch.matmul(cell_embed, cell_embed_weight)
-        CpG_embed = torch.matmul(CpG_embed, CpG_embed_weight)
-        CNN_embed = torch.matmul(CNN_embed, CNN_embed_weight)
-
-        CNN_embed = model.CNN[0].CNN(CNN_embed.view(-1,model.RF,4).permute(0,2,1)).view(-1,256*model.CNN[0].hlen)
-        CNN_embed = model.CNN[0].lin(CNN_embed)
-        DNA_embed = model.CNN[1:](CNN_embed).view(bsz, seqlen, -1)
-
-
+        DNA_embed = model.CNN(X_batch.view(-1,model.RF)).view(bsz, seqlen, -1) # bsz, seqlen, DNA_embed_size
+        cell_embed = model.cell_embed(cell_indices) # bsz, n_rep,  embed_size
+        CpG_embed = model.CpG_embed(y_batch) # bsz, seqlen, n_rep, cpg_size
+        
         DNA_embed = DNA_embed.unsqueeze(-2).expand(-1,-1,n_cells,-1)
         cell_embed = cell_embed.unsqueeze(1).expand(-1,seqlen,-1,-1)
 
@@ -212,8 +208,14 @@ for i in range(config.shape[0]):
         out_dict['total'].append(torch.sum(out[-1][0]+out[0][0]+out[1][0],-1).cpu())
     
     if args.make_plot:
-        annot = (y_batch[0].cpu().numpy().T-1).astype(str)
-        annot[np.where(annot=="-1")] = '?'
+        annot = y_batch[0].cpu().numpy().T-1
+        if model.hparams.data_mode == "continuous":
+            annot = np.round(annot, 2)
+        else:
+            annot = annot.astype(int)
+        as_questionmark = np.where(annot==-1)
+        annot = (annot).astype(str)
+        annot[as_questionmark] = '?'
         
         vlim = np.abs(torch.sum(out[-1][0]+out[0][0]+out[1][0],-1).cpu().numpy().T).max()
         
@@ -230,10 +232,18 @@ for i in range(config.shape[0]):
             if args.plot_window:
                 to_plot = to_plot[:, slice_]
                 
-                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
-                annot[np.where(annot=="-1")] = '?'
+                annot = y_batch[0].cpu().numpy().T-1
+                if model.hparams.data_mode == "continuous":
+                    annot = np.round(annot, 2)
+                else:
+                    annot = annot.astype(int)
+                
+                as_questionmark = np.where(annot==-1)
+                annot = (annot).astype(str)
+                annot[as_questionmark] = '?'
                 annot = annot[:, slice_]
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'Total Contributions ' + add_title, vlim, args.figsize)
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'Total Contributions ' + add_title, vlim,
+                    args.figsize, model.hparams.data_mode)
             plt.savefig(args.plot_name_prefix+'total_'+f"{i:03d}"+args.plot_name_suffix)
 
         if args.which != 'main':
@@ -241,34 +251,55 @@ for i in range(config.shape[0]):
             if args.plot_window:
                 to_plot = to_plot[:, slice_]
                 
-                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
-                annot[np.where(annot=="-1")] = '?'
+                annot = y_batch[0].cpu().numpy().T-1
+                if model.hparams.data_mode == "continuous":
+                    annot = np.round(annot, 2)
+                else:
+                    annot = annot.astype(int)
+                as_questionmark = np.where(annot==-1)
+                annot = (annot).astype(str)
+                annot[as_questionmark] = '?'
                 annot = annot[:, slice_]
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'CpG Embedding Contributions ' + add_title, vlim, args.figsize)
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'CpG Embedding Contributions ' + add_title, vlim, args.figsize,
+                    model.hparams.data_mode)
             plt.savefig(args.plot_name_prefix+'cpg_'+f"{i:03d}"+args.plot_name_suffix)
 
             to_plot = torch.sum(out[-1][0],dim=-1).cpu().numpy().T
             if args.plot_window:
                 to_plot = to_plot[:, slice_]
                 
-                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
-                annot[np.where(annot=="-1")] = '?'
+                annot = y_batch[0].cpu().numpy().T-1
+                if model.hparams.data_mode == "continuous":
+                    annot = np.round(annot, 2)
+                else:
+                    annot = annot.astype(int)
+                as_questionmark = np.where(annot==-1)
+                annot = (annot).astype(str)
+                annot[as_questionmark] = '?'
                 annot = annot[:, slice_]
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'Cell Embedding Contributions ' + add_title, vlim, args.figsize)
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'Cell Embedding Contributions ' + add_title, vlim, args.figsize,
+                    model.hparams.data_mode)
             plt.savefig(args.plot_name_prefix+'cell_'+f"{i:03d}"+args.plot_name_suffix)
 
             to_plot = torch.sum(out[0][0],dim=-1).cpu().numpy().T
             if args.plot_window:
                 to_plot = to_plot[:, slice_]
-                annot = (y_batch[0].cpu().numpy().T-1).astype(str)
-                annot[np.where(annot=="-1")] = '?'
+                annot = y_batch[0].cpu().numpy().T-1
+                if model.hparams.data_mode == "continuous":
+                    annot = np.round(annot, 2)
+                else:
+                    annot = annot.astype(int)
+                as_questionmark = np.where(annot==-1)
+                annot = (annot).astype(str)
+                annot[as_questionmark] = '?'
                 annot = annot[:, slice_]
-            plotter(to_plot, annot, y_true, row_index_s, pred, 'DNA Embedding Contributions ' + add_title, vlim, args.figsize)
+            plotter(to_plot, annot, y_true, row_index_s, pred, 'DNA Embedding Contributions ' + add_title, vlim, args.figsize,
+                    model.hparams.data_mode)
             plt.savefig(args.plot_name_prefix+'dna_'+f"{i:03d}"+args.plot_name_suffix)
 
         plt.close('all')
     
-out_dict['errors'] = np.array(out_dict['preds'])
+out_dict['errors'] = np.array(out_dict['errors'])
 out_dict['ref'] = np.array(out_dict['ref'])
 if args.which == 'both':
     out_dict['total'] = np.array([p.numpy() for p in out_dict['total']])

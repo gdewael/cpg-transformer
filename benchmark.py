@@ -79,7 +79,7 @@ with torch.no_grad():
         DNA, y_input, pos, index_label, cell_indices = batch
         
         DNA_embed = DNA.to(dev)
-        y_masked = y_input.to(dev, dtype=torch.long)
+        y_masked = y_input.to(dev, dtype=model.dtype)
         pos = pos.to(dev, dtype=torch.long)
         cells = cell_indices.to(dev, dtype=torch.long)
 
@@ -87,8 +87,8 @@ with torch.no_grad():
 
         pos = pos - pos[:,0].unsqueeze(1)
 
-
         cell_embed = model.cell_embed(cells) # n_rep x embed_size
+        
         CpG_embed = model.CpG_embed(y_masked) # bsz, seqlen, n_rep, cpg_size
 
         DNA_embed = DNA_embed.unsqueeze(-2).expand(-1,-1,n_cells,-1)
@@ -99,10 +99,14 @@ with torch.no_grad():
             x, pos = layer((x,pos))
             x = x[:,w:-w]
             pos = pos[:,w:-w]
+            
         y_predict = model.output_head(x).squeeze(1).squeeze(-1)
         y_hat = y_predict[torch.arange(bsz), index_label[1]]
-
-        y_output[index_label[0], index_label[1]] = torch.sigmoid(y_hat).cpu().numpy()
+        
+        if model.hparams.data_mode == 'binary':
+            y_output[index_label[0], index_label[1]] = torch.sigmoid(y_hat).cpu().numpy()
+        if model.hparams.data_mode == 'continuous':
+            y_output[index_label[0], index_label[1]] = y_hat.cpu().numpy()
 
 
         if (ix % 50) == 0:
@@ -116,7 +120,7 @@ with torch.no_grad():
         pos, cell_indices = pos.unsqueeze(0), cell_indices.unsqueeze(0)
 
         DNA_embed = DNA.to(dev)
-        y_masked = y_input.to(dev, dtype=torch.long)
+        y_masked = y_input.to(dev, dtype=model.dtype)
         pos = pos.to(dev, dtype=torch.long)
         cells = cell_indices.to(dev, dtype=torch.long)
 
@@ -126,6 +130,7 @@ with torch.no_grad():
 
 
         cell_embed = model.cell_embed(cells) # n_rep x embed_size
+        
         CpG_embed = model.CpG_embed(y_masked) # bsz, seqlen, n_rep, cpg_size
 
         DNA_embed = DNA_embed.unsqueeze(-2).expand(-1,-1,n_cells,-1)
@@ -134,13 +139,16 @@ with torch.no_grad():
         x = model.combine_embeds(x)
         for layer in model.transformer:
             x, pos = layer((x,pos))
-
+        
         y_predict = model.output_head(x).squeeze(1).squeeze(-1)
         index_in_out = index_label[0]-max(0,index_label[0]-dataset.w)
         y_hat = y_predict[0, index_in_out, index_label[1]]
-        y_output[index_label[0], index_label[1]] = torch.sigmoid(y_hat).cpu().numpy()
         
-     
+        if model.hparams.data_mode == 'binary':
+            y_output[index_label[0], index_label[1]] = torch.sigmoid(y_hat).cpu().numpy()
+        if model.hparams.data_mode == 'continuous':
+            y_output[index_label[0], index_label[1]] = y_hat.cpu().numpy()
+        
     print('Progress:', 100.0, '%. After', np.round(time()-t,2), 'seconds', end="\r", flush=True)   
         
 with open(args.output, 'wb') as f:

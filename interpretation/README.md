@@ -23,8 +23,8 @@ Every row indicates one site to interpret. Columns denote the following:
 1. chromosome key in the input files
 2. row (cell) index of the site to be interpreted
 3. column (CpG site) index of the site to be interpreted
-4. Reference label of the site to be interpreted. Interpretation of every site happens against a reference label. (Contributions will be computed based on the output probability of the site being predicted as the reference label). Should be either 0 or 1.
-5. Label changes at the site to be interpreted. The label at the site can be perturbed to see how the model reacts to a different label (e.g. it being unobserved/masked). -1: masked, 0: unmethylated, 1: methylated, None: don't change label.
+4. Reference label of the site to be interpreted. Interpretation of every site happens against a reference label. (Contributions will be computed based on the output probability of the site being predicted as the reference label). For a binary model, should be either 0 or 1. For continuous models, should be between 0 and 1
+5. Label changes at the site to be interpreted. The label at the site can be perturbed to see how the model reacts to a different label (e.g. it being unobserved/masked). For binary, should take one of these values: -1: masked, 0: unmethylated, 1: methylated, None: don't change label. For continuous models: should be -1, None, or between 0 and 1.
 
 
 More info on the script arguments:
