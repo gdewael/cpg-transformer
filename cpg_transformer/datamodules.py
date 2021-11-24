@@ -7,6 +7,10 @@ from torch.utils.data import WeightedRandomSampler
 import math
 import pandas as pd
 
+
+def sample_from_cdf(cdf, n):
+    return cdf['x'][(torch.rand(n, 1) < cdf['y']).int().argmax(-1)]
+
 class CpGTransformerDataModule(pl.LightningDataModule):
     def __init__(self, X, y, pos, segment_size=1024, RF=1001, fracs=[1,0,0],
                  mask_perc=0.25, mask_random_perc=0.2,
@@ -50,7 +54,7 @@ class CpGTransformerDataModule(pl.LightningDataModule):
                 y_temp = torch.from_numpy(y_temp)
                 pos_temp = torch.from_numpy(pos_temp)
                 
-                
+               
             X_temp = torch.cat((torch.full((self.RF2,),4, dtype=torch.int8), X_temp,
                                 torch.full((self.RF2,),4, dtype=torch.int8)))
             pos_temp = pos_temp.clone() + self.RF2
@@ -133,9 +137,12 @@ class CpGTransformerDataset(torch.utils.data.Dataset):
         self.r = torch.arange(-RF2, RF2+1)
         self.k = RF
         
-        c = torch.stack([s[1] for s in split]).unique(return_counts=True)[1]
-        self.count_labels = torch.tensor([torch.true_divide(c[1], c[1]+c[2]),
-                                          torch.true_divide(c[2], c[1]+c[2])])
+        # make a CDF of label distribution to sample from in randomizing:
+        s = torch.stack([s[1] for s in split])
+        s = s[s != -1]
+        indices = torch.randperm(s.shape[0])[:2500]
+        self.cdf = {'x': s[indices].sort().values, 'y': torch.linspace(0, 1, 2500)}
+        
         self.mp = mask_percentage
         self.mrp = mask_random_percentage
         
@@ -155,7 +162,7 @@ class CpGTransformerDataset(torch.utils.data.Dataset):
             sample_indices = torch.randperm(cell_indices.shape[0])[:self.resample]
             cell_indices = cell_indices[sample_indices]
             y = y[:,sample_indices]
-
+        
         y_orig = y+1
         seqlen, n_rep = y_orig.size()
         y_masked = y_orig.clone()
@@ -168,12 +175,13 @@ class CpGTransformerDataset(torch.utils.data.Dataset):
             perm = torch.randperm(nonzeros.size(0))[:n_permute]
             nonzeros = nonzeros[perm]
             mask, rand = torch.split(nonzeros,[n_mask,n_random])
+            
             y_masked[mask[:,0],mask[:,1]] = 0
-            y_masked[rand[:,0],rand[:,1]] = torch.tensor(list(WeightedRandomSampler(self.count_labels,
-                                                                                    n_random)),dtype=torch.int8)+1
+            y_masked[rand[:,0],rand[:,1]] = sample_from_cdf(self.cdf, n_random)+1
         else:
             perm = torch.randperm(nonzeros.size(0))[:n_permute]
             nonzeros = nonzeros[perm]
+            
             y_masked[nonzeros[:,0],nonzeros[:,1]] = 0
         
         return x_windows, y_orig, y_masked, pos, nonzeros, cell_indices
@@ -210,7 +218,6 @@ class CpGTransformerImputingDataModule(pl.LightningDataModule):
                 y_temp = torch.from_numpy(y_temp)
                 pos_temp = torch.from_numpy(pos_temp)
 
-
             X_temp = torch.cat((torch.full((self.RF2,),4, dtype=torch.int8), X_temp,
                                 torch.full((self.RF2,),4, dtype=torch.int8)))
             pos_temp = pos_temp.clone() + self.RF2
@@ -230,22 +237,32 @@ class CpGTransformerImputingDataModule(pl.LightningDataModule):
 
             n_pos = len(pos_temp)
             # prepare cuts that segment the genome & labels
-            cuts_ = torch.arange(0,n_pos-self.segment_size,self.segment_size-self.RF2_TF*2)
-            cuts = torch.tensor([(indices[i],indices[i+self.segment_size-1]) for i in cuts_])
+            try:
+                cuts_ = torch.arange(0,n_pos-self.segment_size,self.segment_size-self.RF2_TF*2)
+                cuts = torch.tensor([(indices[i],indices[i+self.segment_size-1]) for i in cuts_])
 
-            batched_temp=[(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
-                       y_temp[i:i+self.segment_size],
-                       indices[i:i+self.segment_size]-indices[i]+self.RF2, 
-                       pos_temp[i:i+self.segment_size]-pos_temp[i]) for i, (srt, stp) in zip(cuts_, cuts)]
+                batched_temp=[(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
+                           y_temp[i:i+self.segment_size],
+                           indices[i:i+self.segment_size]-indices[i]+self.RF2, 
+                           pos_temp[i:i+self.segment_size]-pos_temp[i]) for i, (srt, stp) in zip(cuts_, cuts)]
 
-            cut_last_ = cuts_[-1]+self.segment_size-self.RF2_TF*2
-            cut_last = torch.tensor([indices[cut_last_],indices[-1]])
-            srt, stp = cut_last
+                cut_last_ = cuts_[-1]+self.segment_size-self.RF2_TF*2
+                cut_last = torch.tensor([indices[cut_last_],indices[-1]])
+                srt, stp = cut_last
 
-            batched_temp += [(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
-                       y_temp[cut_last_:],
-                       indices[cut_last_:]-indices[cut_last_]+self.RF2, 
-                       pos_temp[cut_last_:]-pos_temp[cut_last_])]
+                batched_temp += [(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
+                           y_temp[cut_last_:],
+                           indices[cut_last_:]-indices[cut_last_]+self.RF2, 
+                           pos_temp[cut_last_:]-pos_temp[cut_last_])]
+            except:
+                cut_last_ = 0
+                cut_last = torch.tensor([indices[cut_last_],indices[-1]])
+                srt, stp = cut_last
+
+                batched_temp = [(X_temp[max(srt-self.RF2,0):stp+1+self.RF2],
+                           y_temp[cut_last_:],
+                           indices[cut_last_:]-indices[cut_last_]+self.RF2, 
+                           pos_temp[cut_last_:]-pos_temp[cut_last_])]
 
         
             self.datasets_per_chr[chr_name] = torch.utils.data.DataLoader(

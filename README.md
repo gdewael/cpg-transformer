@@ -75,7 +75,7 @@ python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 2 --accel
 python train_cpg_transformer.py X_ser.npz y_ser.npz pos_ser.npz --gpus 1 --transfer_checkpoint data/model_checkpoints/Ser_model.pt # transfer learning
 
 # Impute a dataset with a trained model
-python impute_genome.py cpg_transformer X_ser.npz y_ser.npz pos_ser.npz --model_checkpoint path/to/saved/model.ckpt
+python impute_genome.py cpg_transformer X_ser.npz y_ser.npz pos_ser.npz output_ser.npz --model_checkpoint path/to/saved/model.ckpt
 ```
 
 We additionally provide Google Colab notebooks for those with no local GPU resources:

@@ -19,6 +19,8 @@ parser.add_argument('--prepend_chr', action='store_true',
                     help='whether to prepend the str "chr" to the names of chromosomes given in --chroms.')
 parser.add_argument('--zero_indexed', action='store_true',
                     help='Add this flag if your dataFile positions are already zero indexed.')
+parser.add_argument('--continuous', action='store_true',
+                    help='Add this flag if your dataFile methylation calls are continuous, else they will be binarized during processing.')
 
 args = parser.parse_args()
 
@@ -41,9 +43,12 @@ for chrom_name in chroms:
     dat_chrom = dat[dat[0] == chrom_name]
 
     dat_subset = dat_chrom[np.in1d(dat_chrom[1].values, indices)]
-    
-    y_encoded[chrom_name] = dat_subset.iloc[:,2:].values.astype('int8')
+    if args.continuous:
+        y_encoded[chrom_name] = dat_subset.iloc[:,2:].values.astype('float32')
+    else:
+        y_encoded[chrom_name] = dat_subset.iloc[:,2:].values.astype('int8')
     pos_encoded[chrom_name] = (dat_subset[1].values).astype('int32')
+    
 
 
 np.savez_compressed(args.y_outFile, **y_encoded)

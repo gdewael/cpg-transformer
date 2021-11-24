@@ -50,7 +50,7 @@ dm_parse.add_argument('--n_workers', type=int, default=4,
 
 model_parse = parser.add_argument_group('Model', 'CpG Transformer Hyperparameters')
 model_parse.add_argument('--transfer_checkpoint', type=str, default=None,
-                         help='.ckpt file to transfer model weights from. Has to be either a `.ckpt` pytorch lightning checkpoint or a `.pt` pytorch state_dict. If a `.ckpt` file is provided, then all following model arguments will not be used (apart from `--lr`). If a `.pt` file is provided, then all following model arguments HAVE to correspond to the arguments of the saved model. When doing transfer learning, a lower-than-default learning rate (`--lr`) is advised.')
+                         help='.ckpt file to transfer model weights from. Has to be either a `.ckpt` pytorch lightning checkpoint or a `.pt` pytorch state_dict. If a `.ckpt` file is provided, then all following model arguments will not be used (apart from `--lr`). If a `.pt` file is provided, then all model arguments affecting the number of weights HAVE to correspond to those of the saved model. To perform transfer learning with models that have been trained on binary data and transfer them to continuous data (or vice versa), only .pt checkpoints can be used. When doing transfer learning, a lower-than-default learning rate (`--lr`) is advised.')
 model_parse.add_argument('--RF', type=int, default=1001,
                          help='Receptive field of the underlying CNN.')
 model_parse.add_argument('--n_conv_layers', type=int, default=2,
@@ -109,6 +109,11 @@ X = np.load(args.X)
 y = np.load(args.y)
 pos = np.load(args.pos)
 
+if np.all(np.mod(y[list(y.keys())[0]], 1) == 0):
+    data_mode = 'binary'
+else:
+    data_mode = 'continuous'
+
 from cpg_transformer.cpgtransformer import CpGTransformer
 from cpg_transformer.datamodules import CpGTransformerDataModule
 
@@ -123,15 +128,17 @@ if args.transfer_checkpoint:
     else:
         pretrained_model_state = torch.load(args.transfer_checkpoint)
         n_cells_pretrained = pretrained_model_state['cell_embed.weight'].shape[0]
-        model = CpGTransformer(n_cells_pretrained, RF=args.RF, n_conv_layers=args.n_conv_layers, CNN_do=args.CNN_do,
+        model = CpGTransformer(n_cells_pretrained, RF=args.RF, n_conv_layers=args.n_conv_layers,
+                       CNN_do=args.CNN_do, data_mode = data_mode,
                        DNA_embed_size=args.DNA_embed_size, cell_embed_size=args.cell_embed_size,
                        CpG_embed_size=args.CpG_embed_size, transf_hsz=args.transf_hsz,
                        transf_do=args.transf_do, act=args.act, n_transformers=args.n_transformers,
                        n_heads=args.n_heads, head_dim=args.head_dim, window=args.window,
                        layernorm=args.layernorm, lr=args.lr, lr_decay_factor=args.lr_decay_factor,
                        warmup_steps=args.warmup_steps, mode=args.mode)
-        model.load_state_dict(pretrained_model_state)
+        model.load_state_dict(pretrained_model_state, strict = False)
         model.cell_embed = torch.nn.Embedding(n_cells, model.hparams.cell_embed_size)       
+        model.hparams.n_cells = n_cells
         
 else:
     model = CpGTransformer(n_cells, RF=args.RF, n_conv_layers=args.n_conv_layers, CNN_do=args.CNN_do,
@@ -140,7 +147,7 @@ else:
                        transf_do=args.transf_do, act=args.act, n_transformers=args.n_transformers,
                        n_heads=args.n_heads, head_dim=args.head_dim, window=args.window,
                        layernorm=args.layernorm, lr=args.lr, lr_decay_factor=args.lr_decay_factor,
-                       warmup_steps=args.warmup_steps, mode=args.mode)
+                       warmup_steps=args.warmup_steps, mode=args.mode, data_mode = data_mode)
     
     
 
@@ -151,7 +158,7 @@ datamodule = CpGTransformerDataModule(X, y, pos, segment_size=args.segment_size,
                                       val_keys=args.val_keys, test_keys=args.test_keys, 
                                       batch_size=args.batch_size, n_workers=args.n_workers)
 
-
+print('Running in', model.hparams.data_mode, 'mode.')
 callbacks = [ModelCheckpoint(monitor='val_loss', mode='min')]
 if args.tensorboard:
     logger = TensorBoardLogger(args.log_folder, name=args.experiment_name)

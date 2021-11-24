@@ -6,12 +6,37 @@ from torchmetrics.functional import auroc, accuracy, f1
 from cpg_transformer.blocks import MultiDimWindowTransformerLayer
 from cpg_transformer.blocks import CnnL2h128, CnnL3h128, RnnL1, JointL2h512
 
+
+class CpGEmbedder(nn.Module):
+    def __init__(self, hidden_size, mode = 'binary'):
+        super().__init__()
+        if mode == 'binary':
+            self.CpG_embed = nn.Embedding(3, hidden_size)
+            self.forward = self.forward_binary
+        elif mode == 'continuous':
+            self.CpG_embed_linear = nn.Linear(1, hidden_size)
+            self.mask_embed = self._init_mask(nn.Parameter(torch.Tensor(1, hidden_size)))
+            self.forward = self.forward_continuous
+        
+    def forward_binary(self, y):
+        return self.CpG_embed(y.long())
     
+    def forward_continuous(self, y):
+        z = self.CpG_embed_linear(y.unsqueeze(-1).to(self.CpG_embed_linear.weight.dtype) - 1)
+        if (y == 0).any():
+            z[(y == 0)] = self.mask_embed
+        return z
+    
+    def _init_mask(self, mask):
+        bound = 1/mask.size(1)**0.5
+        return nn.init.uniform_(mask, -bound, bound)    
+
 class CpGTransformer(pl.LightningModule):
     def __init__(self, n_cells, RF=1001, n_conv_layers=2, CNN_do=.0, DNA_embed_size=32,
                  cell_embed_size=32, CpG_embed_size=32, transf_hsz=64, transf_do=.20,
-                 act='relu', n_transformers=4, n_heads=8, head_dim=8, window=21, mode='2D',
-                 layernorm=True, lr=5e-4, lr_decay_factor=.90, warmup_steps=1000):
+                 act='relu', n_transformers=4, n_heads=8, head_dim=8, window=21,
+                 mode='axial', data_mode = 'binary', layernorm=True,
+                 lr=5e-4, lr_decay_factor=.90, warmup_steps=1000):
         super().__init__()
         assert (n_conv_layers == 2) or (n_conv_layers == 3), 'Number of conv layers should be 2 or 3.'
         self.RF = RF
@@ -25,7 +50,7 @@ class CpGTransformer(pl.LightningModule):
         # cell embed:
         self.cell_embed = nn.Embedding(n_cells, cell_embed_size)
         # CpG embed:
-        self.CpG_embed = nn.Embedding(3, CpG_embed_size)
+        self.CpG_embed = CpGEmbedder(CpG_embed_size, mode = data_mode)
         
         self.combine_embeds = nn.Sequential(nn.Linear(cell_embed_size+CpG_embed_size+DNA_embed_size,
                                         transf_hsz), nn.ReLU())
@@ -44,7 +69,7 @@ class CpGTransformer(pl.LightningModule):
     def process_batch(self, batch):
         x, y_orig, y_masked, pos, ind_train, cell_indices = batch
         x, y_orig = x.to(torch.long), y_orig.to(self.dtype)
-        pos, y_masked = pos.to(torch.long), y_masked.to(torch.long)
+        pos = pos.to(torch.long)
         return (x, y_masked, pos, cell_indices), (y_orig, ind_train)
     
     def forward(self, x, y_masked, pos, cells):
@@ -68,7 +93,11 @@ class CpGTransformer(pl.LightningModule):
         y_hat = torch.diagonal(y_hat[:,ind_train[:,:,0], ind_train[:,:,1]]).reshape(-1)
         y = torch.diagonal(y[:,ind_train[:,:,0], ind_train[:,:,1]]).reshape(-1)
         
-        loss = F.binary_cross_entropy_with_logits(y_hat, y-1)
+        
+        if self.hparams.data_mode == 'binary':
+            loss = F.binary_cross_entropy_with_logits(y_hat, y-1)
+        elif self.hparams.data_mode == 'continuous':
+            loss = F.mse_loss(y_hat, y-1)
         
         self.log('train_loss', loss, sync_dist=True)
         return loss
@@ -86,13 +115,19 @@ class CpGTransformer(pl.LightningModule):
         validation_step_outputs = torch.cat(validation_step_outputs,1)
         y_hat = validation_step_outputs[0]
         y = validation_step_outputs[1]
-        loss = F.binary_cross_entropy_with_logits(y_hat, y)
-        y = y.to(torch.int)
-        y_hat = torch.sigmoid(y_hat)
-        self.log('val_loss', loss, sync_dist=True)
-        self.log('AUROC', auroc(y_hat, y), sync_dist=True)
-        self.log('F1', f1(y_hat, y), sync_dist=True)
-        self.log('acc', accuracy(y_hat, y), sync_dist=True)
+        
+        if self.hparams.data_mode == 'binary':
+            loss = F.binary_cross_entropy_with_logits(y_hat, y)
+            y = y.to(torch.int)
+            y_hat = torch.sigmoid(y_hat) 
+            self.log('val_loss', loss, sync_dist=True)
+            self.log('AUROC', auroc(y_hat, y), sync_dist=True)
+            self.log('F1', f1(y_hat, y), sync_dist=True)
+            self.log('acc', accuracy(y_hat, y), sync_dist=True)
+        
+        elif self.hparams.data_mode == 'continuous':
+            loss = F.mse_loss(y_hat, y)
+            self.log('val_loss', loss, sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
