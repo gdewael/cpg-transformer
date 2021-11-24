@@ -1,7 +1,9 @@
 # CpG Transformer
 
-This repository contains code, pre-trained models and instructions on how to use CpG Transformer ([preprint paper link](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v2))
+This repository contains code, pre-trained models and instructions on how to use CpG Transformer ([published paper link](https://doi.org/10.1093/bioinformatics/btab746))
 for imputation of single-cell methylomes.
+
+**New from 24-11-2021 onwards:** CpG Transformer now supports continuous methylation calls as input, for which it will train a regression model in the same fashion as described in our publication, but then with the mean-squared error as loss function. Performances for regression have not been benchmarked as of yet.
 
 <details><summary>Table of contents</summary>
   
@@ -39,19 +41,19 @@ for imputation of single-cell methylomes.
 CpG Transformer is implemented in [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning).
 
 If you have one or more GPUs on your machine, we recommend running CpG Transformer locally using a conda environment.
-Make sure to install the correct version of PyTorch (using the cuda version that is installed on your system).
+Make sure to install the correct version of [PyTorch](https://pytorch.org/get-started/locally/) (using the cuda version that is installed on your system).
 The following shows an example installation process for a system running CUDA 11.1:
 
 ```bash
 conda create --name cpgtransformer
 source activate cpgtransformer
 conda install pip
-pip install torch==1.9.0+cu111 -f https://download.pytorch.org/whl/torch_stable.html
-pip install pytorch-lightning==1.3.0 biopython pandas numpy
+pip install torch
+pip install pytorch-lightning biopython pandas numpy
 git clone https://github.com/gdewael/cpg-transformer.git
 ```
 
-In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested with up to Python 3.9, PyTorch 1.9.0, PyTorch Lightning 1.3.0.
+In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested with up to Python 3.9, PyTorch 1.10, PyTorch Lightning 1.5
 
 For CaMelia training and imputation, additionally do:
 ```bash
@@ -95,7 +97,7 @@ CpG Transformer uses NumPy `.npz` zipped archive files as inputs. More specifica
 'B': 14, 'X': 15}
 ```
 
-**(2)** `y.npz`. A partially observed methylation matrix as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 2D NumPy array corresponding to the methylation matrix for that chromosome. Every methylation matrix is a `# sites * # cells` matrix with every element at row `i` and column `j` denoting the methylation state of CpG site `i` of cell `j`. Methylation states are encoded by `-1 = unknown`, `0 = unmethylated`, `1 = methylated`. For training, we recommend only including CpG sites where at least one cell has an observed state, as columns without observation confer no useful information when training. Note that CpG Transformer only accepts forwards strand methylation states. If your methylation calls are recorded for both strands separately, you should combine them to the forward strand.
+**(2)** `y.npz`. A partially observed methylation matrix as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 2D NumPy array corresponding to the methylation matrix for that chromosome. Every methylation matrix is a `# sites * # cells` matrix with every element at row `i` and column `j` denoting the methylation state of CpG site `i` of cell `j`. Methylation states are encoded by `-1 = unknown`, `0 = unmethylated`, `1 = methylated`. For training, we recommend only including CpG sites where at least one cell has an observed state, as columns without observation confer no useful information when training. Note that CpG Transformer only accepts forwards strand methylation states. If your methylation calls are recorded for both strands separately, you should combine them to the forward strand. **New:** for continuous methylation calls, methylation states should be encoded as values `-1 = unknown`, or `[0...1] = methylation frequency`.
 
 **(3)** `pos.npz`. Positions (0-indexed) of all input CpG sites as a dictionary of NumPy arrays. Every key-value pair corresponds to a chromosome, with the key the name of the chromosome (e.g.: `'chr1'`) and the value a 1D NumPy array corresponding to the locations of all profiled CpG sites in that chromosome (columns in the second input).
 
@@ -495,13 +497,18 @@ Pre-trained CpG Transformer models for all tested [datasets](#perf-comp) are ava
 If you find this repository useful in your research, please cite our [paper](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v2).
 ```bibtex
 @article {dewaele2021cpg,
-	author = {Gaetan De Waele and Jim Clauwaert and Gerben Menschaert and Willem Waegeman},
+	author = {De Waele, Gaetan and Clauwaert, Jim and Menschaert, Gerben and Waegeman, Willem},
 	title = {CpG Transformer for imputation of single-cell methylomes},
-	year = {2021},
-	doi = {10.1101/2021.06.08.447547},
-	URL = {https://www.biorxiv.org/content/early/2021/09/17/2021.06.08.447547}
+    journal = {Bioinformatics},
+    year = {2021},
+    month = {10},
+	issn = {1367-4803},
+    doi = {10.1093/bioinformatics/btab746},
+    url = {https://doi.org/10.1093/bioinformatics/btab746},
+    note = {btab746},
 }
 ```
+
 
 ## License <a name="license"></a>
 

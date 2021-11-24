@@ -55,6 +55,7 @@ chrY    185627  0       -1      -1      -1
 chrY    185823  -1      -1      0       -1
 ```
 
+**New:** `EncodeFromTsv.py` has support for tab-separated files with continuous methylation calls via the `--continuous` flag.
 
 # Benchmark datasets instructions
 
