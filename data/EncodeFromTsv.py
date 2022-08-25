@@ -1,7 +1,8 @@
 import argparse
-import pandas as pd
-import numpy as np
 import re
+
+import numpy as np
+import pandas as pd
 
 parser = argparse.ArgumentParser(description='Encode CpG labels from Wig file into compact format')
 
@@ -34,7 +35,11 @@ dat = pd.read_csv(args.dataFile, sep='\t', header=None,
 
 if not args.zero_indexed:
     dat[1] = dat[1] - 1
+    
+X_encoded = np.load(args.EncodedGenome)
 
+y_encoded = {}
+pos_encoded = {}
 for chrom_name in chroms:
     print('Encoding',chrom_name,'...')
     X_chrom = X_encoded[chrom_name]
