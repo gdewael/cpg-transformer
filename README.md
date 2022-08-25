@@ -45,12 +45,11 @@ Make sure to install the correct version of [PyTorch](https://pytorch.org/get-st
 The following shows an example installation process for a system running CUDA 11.1:
 
 ```bash
-conda create --name cpgtransformer
-source activate cpgtransformer
-conda install pip
-pip install torch
-pip install pytorch-lightning biopython pandas numpy
 git clone https://github.com/gdewael/cpg-transformer.git
+cd cpg-transformer
+conda create --name cpgtransformer python=3.9
+source activate cpgtransformer
+pip install -r requirements.txt
 ```
 
 In case CpG Transformer loses backwards compatibility with more-recent versions of PyTorch and PyTorch Lightning: this repo has been tested with up to Python 3.9, PyTorch 1.10, PyTorch Lightning 1.5
