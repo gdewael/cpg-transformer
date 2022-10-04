@@ -197,15 +197,13 @@ cd MBL
 To download:
 ```bash
 
-count=0
-for i in $(seq 767 2 815)
+for i in $(seq 56 85)
 do
-    count=$((count+1))
-    formatcount=$(printf "%02d" $count)
-    wget https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM1593nnn/GSM1593"$i"/suppl/GSM1593"$i"_Ca_"$formatcount"_RRBS.single.CpG.txt.gz
+    wget -r -nH -np --cut-dirs=4 -e robots=off -A *.bw https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM4912nnn/GSM49120"$i"/suppl/
 done
 
-gunzip *CpG.txt.gz
+mv suppl/*.bw ./
+rm -r suppl
 ```
 
 Convert BigWig to Wig.
