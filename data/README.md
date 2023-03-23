@@ -116,6 +116,10 @@ python ../CombineEncodedLabels.py --y_files y_* --pos_files pos_* --y_outFile y.
 rm *.fa *.txt pos_* y_*
 ```
 
+Thanks to [yuzhong-deng](https://github.com/yuzhong-deng) for providing a script to download genomic contexts to evaluate predictions on specific subsets of the genome corresponding to a specific annotation.
+See [his notebook](https://github.com/gdewael/cpg-transformer/blob/main/data/genomic-contexts/genomic_contexts_data.ipynb).
+
+
 ## 2i dataset
 
 Perform the same steps as with the Ser dataset. Change the downloaded methylation matrix files to the 2i files by doing: `for i in $(seq 35 46)` instead of `for i in $(seq 55 74)`
