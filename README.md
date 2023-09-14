@@ -495,16 +495,15 @@ Pre-trained CpG Transformer models for all tested [datasets](#perf-comp) are ava
 
 If you find this repository useful in your research, please cite our [paper](https://www.biorxiv.org/content/10.1101/2021.06.08.447547v2).
 ```bibtex
-@article {dewaele2021cpg,
-	author = {De Waele, Gaetan and Clauwaert, Jim and Menschaert, Gerben and Waegeman, Willem},
-	title = {CpG Transformer for imputation of single-cell methylomes},
-    journal = {Bioinformatics},
-    year = {2021},
-    month = {10},
-	issn = {1367-4803},
-    doi = {10.1093/bioinformatics/btab746},
-    url = {https://doi.org/10.1093/bioinformatics/btab746},
-    note = {btab746},
+@article{dewaele2022cpg,
+  title={CpG Transformer for imputation of single-cell methylomes},
+  author={De Waele, Gaetan and Clauwaert, Jim and Menschaert, Gerben and Waegeman, Willem},
+  journal={Bioinformatics},
+  volume={38},
+  number={3},
+  pages={597--603},
+  year={2022},
+  publisher={Oxford University Press}
 }
 ```
 
